@@ -1,0 +1,1567 @@
+local NeverLose = loadstring(game:HttpGet("https://raw.githubusercontent.com/4lpaca-pin/NeverLose/refs/heads/main/source.luau"))()
+local Notification = NeverLose:CreateNotification()
+
+local UIS = game:GetService("UserInputService")
+if UIS.TouchEnabled and not UIS.MouseEnabled and not UIS.KeyboardEnabled then
+    getgenv().bypass_adonis = true
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/FakeAngles/PasteWare-v2/refs/heads/main/PasteWareV2LegacyMobile.lua'))() return
+end
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+if not syn or not protectgui then getgenv().protectgui = function() end end
+
+if bypass_adonis then
+    task.spawn(function()
+        local d, h, x, y = false, {}, nil, nil
+        setthreadidentity(2)
+        for _, v in getgc(true) do
+            if typeof(v) == "table" then
+                local a, b, c, e, f = rawget(v,"Detected"), rawget(v,"Kill"), rawget(v,"Check"), rawget(v,"Kick"), rawget(v,"Punish")
+                if typeof(a)=="function" and not x then x=a; hookfunction(x,function() return true end) end
+                if rawget(v,"Variables") and rawget(v,"Process") and typeof(b)=="function" and not y then y=b; hookfunction(y,function() end) end
+                if typeof(c)=="function" then hookfunction(c,function() return false end) end
+                if typeof(e)=="function" then hookfunction(e,function() return false end) end
+                if typeof(f)=="function" then hookfunction(f,function() return false end) end
+            end
+        end
+        hookfunction(getrenv().debug.info, newcclosure(function(...)
+            if x and ... == x then return coroutine.yield(coroutine.running()) end
+            return getrenv().debug.info(...)
+        end))
+        setthreadidentity(7)
+    end)
+end
+
+if not getgenv().ScriptState then
+    getgenv().ScriptState = {
+        isLockedOn=false, targetPlayer=nil, lockEnabled=false,
+        aimLockVisibleCheck=false, aimLockAliveCheck=false, aimLockTeamCheck=false,
+        smoothingFactor=0.1, predictionFactor=0, bodyPartSelected="Head",
+        nightVisionEnabled=false,
+    }
+end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local Workspace = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+local mouse = player:GetMouse()
+
+local function safeMouseMoveRel(x, y)
+    if mousemoverel then
+        pcall(mousemoverel, x, y)
+    else
+        local mx, my = mouse.X, mouse.Y
+        mousemoverel = function(dx, dy)
+            mouse.Move(Vector2.new(mx + dx, my + dy))
+        end
+        pcall(mousemoverel, x, y)
+    end
+end
+
+local function safeMouse1Press()
+    if mouse1press then
+        pcall(mouse1press)
+    else
+        pcall(function() mouse:PressButton1() end)
+    end
+end
+
+local function safeMouse1Release()
+    if mouse1release then
+        pcall(mouse1release)
+    else
+        pcall(function() mouse:ReleaseButton1() end)
+    end
+end
+
+local GUI = NeverLose:CreateWindow({
+    Name = "游戏功能中心",
+    Content = "功能强大 | 易于使用",
+    Logo = NeverLose.GlobalLogo,
+    ConfigFolder = "GameFunctionCenter",
+    Keybind = "RightAlt",
+})
+
+local State = {
+    isFastInteract=false, isAutoInteractEnabled=false, autoInteractRange=10, autoInteractDelay=0.5,
+    autoInteractConnection=nil, interactDistance=100, interactConnection=nil,
+    promptTriggeredConnection=nil, promptButtonHoldBeganConnection=nil, lastInteractedObject=nil,
+    isNoClipEnabled=false, noClipConnection=nil,
+    wallPhaseSettings={rayCount=16,rayLength=15,headHeightOffset=2,updateInterval=0.05,processedWalls={},wallCacheTimeout=2,lastCleanupTime=0},
+    runSpeed=20, isRunKeyEnabled=true, runConnection=nil,
+    isSpinEnabled=false, spinSpeed=10, spinConnection=nil,
+    flyEnabled=false, flySpeed=50, flyConnection=nil,
+    vehicleBoostEnabled=false, vehicleBoostMultiplier=2, vehicleBoostConnection=nil,
+    vehicleJumpEnabled=false, vehicleJumpPower=50, vehicleJumpConnection=nil,
+    forceLookEnabled=false, forceLookConnection=nil,
+    isInvisibilityEnabled=false, invisibilityUndergroundOffset=-15, invisibilityConnection=nil, invisibilityClone=nil, invisibilityRealChar=nil, invisibilityHighlight=nil,
+    isAutoAttackEnabled=false, autoAttackRange=20, autoAttackDelay=0, autoAttackConnection=nil,
+    attackRotationSpeed=1.2, attackRotationAngle=0, teleportMode="rotate", autoAttackLockPlayer=nil,
+    customLockedPlayer=nil, isAttackRangeVisible=false, attackRangeIndicator=nil, attackRangeConnection=nil,
+    isKillAuraEnabled=false, killAuraRange=15, killAuraDelay=0.5,
+    killAuraTargetNPC=false, killAuraTargetPlayer=true, killAuraConnection=nil,
+    lastKillAuraAttackTime=0, cachedNPCs={},
+    aimFovEnabled=false, aimFovRadius=200, aimFovIndicator=nil, aimFovConnection=nil, aimFovFollowMouse=true,
+    aimTargetSwitchEnabled=true, aimAntiShakeEnabled=true, aimLastTargetTime=0, aimTargetNpcsEnabled=false,
+    aimSmoothEnabled=true, aimSmoothSpeed=5, aimAutoPredict=true, aimPredictionAmount=0.165,
+    silentAimEnabled=false, silentAimHitChance=100, silentAimPrediction=0.165,
+    silentAimFOV=200, silentAimVisibleCheck=true, silentAimTeamCheck=false,
+    silentAimTargetType="Players",
+    silentAimPart="Head", silentAimTargetChar=nil, silentAimTargetPart=nil,
+    silentAimUpdateInterval=0.05, silentAimNamecallHooked=false, silentAimIndexHooked=false,
+    silentAimFovCircle=nil, silentAimShowFOV=true, silentAimFovFollowMouse=false, silentAimFovConnection=nil,
+    silentAimTracerLine=nil, silentAimShowTracer=true, silentAimTracerThickness=2,
+    silentAimBulletTeleport=false,
+    hitSoundEnabled=false, hitSoundID="rbxassetid://1533174147", hitSoundVolume=5,
+    isAutoPickupEnabled=false, autoPickupRange=50, autoPickupDelay=0.1, autoPickupConnection=nil,
+    pickupBlacklist={"Baseplate","Terrain","SpawnLocation"},
+    customFOVEnabled=false, customFOV=90, originalFOV=70, fovConnection=nil,
+    nightVisionEnabled=false, nightVisionConnection=nil,
+    espEnabled=false, espDrawings={}, espHighlights={}, espConnection=nil,
+    espSettings={
+        TeamCheck=false, MaxDistance=2000, BoxEnabled=true, BoxStyle="2D", BoxThickness=2,
+        NameEnabled=true, NameMode="DisplayName", NameSize=14,
+        HealthEnabled=true, ShowDistance=true, DistanceUnit="m",
+        TracerEnabled=false, TracerOrigin="Bottom", TracerThickness=1,
+        HeadDotEnabled=false, HeadDotSize=8, HeadDotFilled=true,
+    },
+    espColors={
+        Enemy=Color3.fromRGB(255,50,50), Ally=Color3.fromRGB(50,255,50), Locked=Color3.fromRGB(255,210,0),
+        HealthHigh=Color3.fromRGB(0,255,0), HealthMedium=Color3.fromRGB(255,255,0), HealthLow=Color3.fromRGB(255,0,0),
+        Distance=Color3.fromRGB(200,200,200),
+    },
+    npcEspEnabled=false, npcEspDrawings={}, npcEspMaxDistance=2000, npcEspConnection=nil,
+    npcEspSettings={
+        BoxEnabled=true, NameEnabled=true, HealthEnabled=true, ShowDistance=true,
+        TracerEnabled=false, HeadDotEnabled=false,
+    },
+    npcEspColor=Color3.fromRGB(255,165,0),
+    visualPredictionEnabled=false, visualPredictionLength=0.5,
+    visualPredictionColor=Color3.fromRGB(255,255,0), visualPredictionThickness=1,
+    visualPredictionShowDot=true, visualPredictionDotSize=6,
+    visualPredictionLines={}, visualPredictionDots={},
+    savedPositions={}, autoSafeTeleportEnabled=false, autoSafeTeleportHealthThreshold=20,
+    autoSafeTeleportCooldown=5, lastAutoSafeTeleportTime=0, safeTeleportConnection=nil,
+    lockedTimeValue=14, timeLockConnection=nil,
+    isAntiFlyEnabled=false, isLeftClickDeleteEnabled=false, leftClickDeleteConnection=nil,
+    hitboxEnabled = false,
+    hitboxBodyParts = {"Head", "UpperTorso", "LowerTorso", "LeftArm", "RightArm", "LeftLeg", "RightLeg"},
+    hitboxSizes = {}, hitboxOriginalProps = {},
+    hitboxShowRange = false, hitboxRangeCircles = {}, hitboxRangeConnection = nil,
+    hitboxShowPlayerBox = true, hitboxShowNPCBox = true,
+    npcCollisionDisabled = false, npcCollisionOriginalProps = {},
+    aimMouseEnabled = false, aimMouseMode = "Mouse", aimMouseToggleKey = Enum.KeyCode.E,
+    aimMouseAutoFire = false, aimMouseToggled = false, aimMouseRightHeld = false,
+    aimMouseTarget = nil, aimMouseConnection = nil, aimMouseFovCircle = nil,
+    aimMouseVisibleCheck = true, aimMouseShowFOV = true,
+    aimMouseTeamCheck = false, aimMouseBodyPart = "Head", aimMouseFOVRadius = 200,
+    aimMouseSmoothSpeed = 5, aimMousePredictionAmount = 0.165,
+}
+
+local function char() return player.Character end
+local function hum() local c=char(); return c and c:FindFirstChildOfClass("Humanoid") end
+local function hrp() local c=char(); return c and c:FindFirstChild("HumanoidRootPart") end
+
+local function getVehicle()
+    local c = char(); if not c then return nil end
+    local hum = c:FindFirstChildOfClass("Humanoid"); if not hum then return nil end
+    local seat = hum.SeatPart; if not seat then return nil end
+    local vehicle = seat.Parent
+    while vehicle and not vehicle:IsA("Model") do vehicle = vehicle.Parent end
+    return vehicle
+end
+
+local function getPlayerList()
+    local list = {"无"}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then table.insert(list, p.Name) end
+    end
+    return list
+end
+
+local function playersOnSameTeam(p)
+    if not p then return false end
+    local _,t1=pcall(function() return player.Team end); local _,t2=pcall(function() return p.Team end)
+    return t1 and t2 and t2==t1
+end
+
+local function getPositionOnScreen(Vector)
+    local v,o=camera:WorldToScreenPoint(Vector); return Vector2.new(v.X,v.Y),o
+end
+
+local function IsPlayerVisible(Player)
+    local pc=Player and Player.Character; local lc=player.Character
+    if not (pc and lc) then return false end
+    local tp=pc:FindFirstChild(getgenv().ScriptState.bodyPartSelected or "Head") or pc:FindFirstChild("HumanoidRootPart")
+    if not tp then return false end
+    return #camera:GetPartsObscuringTarget({tp.Position,lc,pc},{lc,pc})==0
+end
+
+local function getClosestPlayer(config)
+    local st=getgenv().ScriptState; config=config or {}
+    local tpo=config.targetPart or st.bodyPartSelected or "Head"
+    local vc=config.visibleCheck or st.aimLockVisibleCheck or false
+    local ac=config.aliveCheck or st.aimLockAliveCheck or false
+    local tc=config.teamCheck or st.aimLockTeamCheck or false
+    local cp, cpl, dtm
+    local origin = State.aimFovFollowMouse and UIS:GetMouseLocation() or Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+    for _,p in next,Players:GetPlayers() do
+        if p==player then continue end; if tc and playersOnSameTeam(p) then continue end
+        if vc and not IsPlayerVisible(p) then continue end
+        local ch=p.Character; if not ch then continue end
+        local h=ch:FindFirstChild("HumanoidRootPart"); local hm=ch:FindFirstChild("Humanoid")
+        if not h or not hm then continue end; if ac and hm.Health<=0 then continue end
+        local sp,on=getPositionOnScreen(h.Position); if not on then continue end
+        if State.aimFovEnabled then if (sp-origin).Magnitude>State.aimFovRadius then continue end end
+        local d=(origin-sp).Magnitude
+        if d<=(dtm or 2000) then local cpt=ch:FindFirstChild(tpo); if cpt then cp=cpt; cpl=p; dtm=d end end
+    end
+    return cp,cpl
+end
+
+local function getNearestPlayer3D()
+    local nearest = nil; local minDist = math.huge; local lc = char()
+    if not lc then return nil end; local lpos = lc:GetPivot().Position
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == player then continue end; local tc = p.Character; if not tc then continue end
+        local h = tc:FindFirstChildOfClass("Humanoid"); if not h or h.Health <= 0 then continue end
+        local rp = tc:FindFirstChild("HumanoidRootPart"); if not rp then continue end
+        local dist = (rp.Position - lpos).Magnitude
+        if dist < minDist then minDist = dist; nearest = p end
+    end
+    return nearest
+end
+
+local function acquireLockTarget()
+    if State.customLockedPlayer then
+        local p=State.customLockedPlayer
+        if p and p.Character then local tp=p.Character:FindFirstChild(getgenv().ScriptState.bodyPartSelected or "Head")
+            if tp then getgenv().ScriptState.isLockedOn=true; getgenv().ScriptState.targetPlayer=p; return true end end
+    end
+    local _,p=getClosestPlayer()
+    if p and p.Character then local tp=p.Character:FindFirstChild(getgenv().ScriptState.bodyPartSelected or "Head")
+        if tp then getgenv().ScriptState.isLockedOn=true; getgenv().ScriptState.targetPlayer=p; return true end end
+    getgenv().ScriptState.isLockedOn=false; getgenv().ScriptState.targetPlayer=nil; return false
+end
+
+local function toggleLockOnPlayer(enabled)
+    if enabled then getgenv().ScriptState.lockEnabled=true; acquireLockTarget()
+    else getgenv().ScriptState.lockEnabled=false; getgenv().ScriptState.isLockedOn=false; getgenv().ScriptState.targetPlayer=nil end
+end
+
+local function toggleForceLook(enabled)
+    State.forceLookEnabled = enabled
+    if State.forceLookConnection then State.forceLookConnection:Disconnect(); State.forceLookConnection = nil end
+    if enabled then
+        State.forceLookConnection = RunService.RenderStepped:Connect(function()
+            if not State.forceLookEnabled then return end
+            local nearest = getNearestPlayer3D()
+            if not nearest then return end
+            local tc = nearest.Character; if not tc then return end
+            local rp = tc:FindFirstChild("HumanoidRootPart"); if not rp then return end
+            local lc = char(); if not lc then return end
+            local lrp = lc:FindFirstChild("HumanoidRootPart"); if not lrp then return end
+            local targetPos = rp.Position; local currentPos = lrp.Position
+            local flatTarget = Vector3.new(targetPos.X, currentPos.Y, targetPos.Z)
+            local lookDir = (flatTarget - currentPos).Unit
+            if lookDir.Magnitude > 0 then lrp.CFrame = CFrame.new(currentPos, currentPos + lookDir) end
+        end)
+    end
+end
+
+-- Invisibility
+local function startInvisibility()
+    State.invisibilityRealChar = char()
+    if not State.invisibilityRealChar or not State.invisibilityRealChar:FindFirstChild("HumanoidRootPart") or not State.invisibilityRealChar:FindFirstChildOfClass("Humanoid") then
+        Notification.new({Title = "隐身失败", Content = "没有角色", Duration = 2}); return
+    end
+    State.isInvisibilityEnabled = true; State.invisibilityRealChar.Archivable = true
+    local spawnCFrame = State.invisibilityRealChar.HumanoidRootPart.CFrame
+    State.invisibilityClone = State.invisibilityRealChar:Clone()
+    State.invisibilityClone.Name = player.Name .. "_Ghost"; State.invisibilityClone.Parent = Workspace
+    State.invisibilityClone.HumanoidRootPart.CFrame = spawnCFrame
+    
+    -- 复制动画到克隆角色
+    local cloneAnimator = State.invisibilityClone:FindFirstChildOfClass("Animator")
+    local realAnimator = State.invisibilityRealChar:FindFirstChildOfClass("Animator")
+    if cloneAnimator and realAnimator then
+        for _, track in ipairs(realAnimator:GetPlayingAnimationTracks()) do
+            if track.Animation then
+                local cloneTrack = cloneAnimator:LoadAnimation(track.Animation)
+                cloneTrack:Play(); cloneTrack:AdjustSpeed(track.Speed)
+                cloneTrack.TimePosition = track.TimePosition
+            end
+        end
+    end
+    local realHumanoid = State.invisibilityRealChar:FindFirstChildOfClass("Humanoid")
+    local cloneHumanoid = State.invisibilityClone:FindFirstChildOfClass("Humanoid")
+    if realHumanoid and cloneHumanoid then
+        cloneHumanoid.WalkSpeed = realHumanoid.WalkSpeed
+        cloneHumanoid.JumpPower = realHumanoid.JumpPower
+    end
+    
+    -- 高亮本体（倒立在地下）
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "InvisibilityHighlight"
+    highlight.Adornee = State.invisibilityRealChar
+    highlight.FillColor = Color3.fromRGB(0, 255, 0)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineColor = Color3.fromRGB(0, 255, 0)
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = State.invisibilityRealChar
+    State.invisibilityHighlight = highlight
+    
+    for _, part in ipairs(State.invisibilityClone:GetDescendants()) do
+        if part:IsA("BasePart") then part.CanCollide = true; part.Anchored = false end
+    end
+    
+    -- 控制克隆角色（傀儡），本体倒立隐藏
+    player.Character = State.invisibilityClone
+    camera.CameraSubject = State.invisibilityClone:FindFirstChildOfClass("Humanoid")
+    
+    State.invisibilityConnection = RunService.Heartbeat:Connect(function()
+        if not State.isInvisibilityEnabled or not State.invisibilityRealChar or not State.invisibilityClone then return end
+        local cloneHRP = State.invisibilityClone:FindFirstChild("HumanoidRootPart")
+        local realHRP = State.invisibilityRealChar:FindFirstChild("HumanoidRootPart")
+        for _, part in ipairs(State.invisibilityRealChar:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
+        
+        if cloneHRP and realHRP then
+            local targetCFrame = cloneHRP.CFrame * CFrame.new(0, State.invisibilityUndergroundOffset, 0) * CFrame.Angles(math.pi, 0, 0)
+            if (realHRP.Position - targetCFrame.Position).Magnitude > 0.5 then
+                State.invisibilityRealChar:PivotTo(targetCFrame)
+            else
+                realHRP.CFrame = targetCFrame
+            end
+            realHRP.AssemblyLinearVelocity = Vector3.zero
+            realHRP.AssemblyAngularVelocity = Vector3.zero
+        end
+        
+        -- 持续同步动画到克隆
+        local cloneAnimator = State.invisibilityClone:FindFirstChildOfClass("Animator")
+        local realAnimator = State.invisibilityRealChar:FindFirstChildOfClass("Animator")
+        if cloneAnimator and realAnimator then
+            local cloneTracks = cloneAnimator:GetPlayingAnimationTracks()
+            local realTracks = realAnimator:GetPlayingAnimationTracks()
+            for _, ct in ipairs(cloneTracks) do
+                local found = false
+                for _, rt in ipairs(realTracks) do
+                    if ct.Animation and rt.Animation and ct.Animation.AnimationId == rt.Animation.AnimationId then found = true; break end
+                end
+                if not found then ct:Stop() end
+            end
+            for _, rt in ipairs(realTracks) do
+                if rt.Animation then
+                    local exists = false
+                    for _, ct in ipairs(cloneTracks) do
+                        if ct.Animation and ct.Animation.AnimationId == rt.Animation.AnimationId then
+                            ct:AdjustSpeed(rt.Speed); ct.TimePosition = rt.TimePosition; exists = true; break
+                        end
+                    end
+                    if not exists then
+                        local newTrack = cloneAnimator:LoadAnimation(rt.Animation)
+                        newTrack:Play(); newTrack:AdjustSpeed(rt.Speed)
+                    end
+                end
+            end
+        end
+        local realHumanoid = State.invisibilityRealChar:FindFirstChildOfClass("Humanoid")
+        local cloneHumanoid = State.invisibilityClone:FindFirstChildOfClass("Humanoid")
+        if realHumanoid and cloneHumanoid then
+            cloneHumanoid.WalkSpeed = realHumanoid.WalkSpeed
+            cloneHumanoid.JumpPower = realHumanoid.JumpPower
+        end
+        
+        if State.invisibilityHighlight then
+            local depth = math.abs(State.invisibilityUndergroundOffset)
+            if depth <= 10 then State.invisibilityHighlight.FillColor = Color3.fromRGB(0, 255, 0)
+            elseif depth <= 20 then State.invisibilityHighlight.FillColor = Color3.fromRGB(255, 255, 0)
+            else State.invisibilityHighlight.FillColor = Color3.fromRGB(255, 100, 0) end
+        end
+    end)
+    Notification.new({Title = "隐身", Content = "已开启 | 本体倒立隐藏", Duration = 2})
+end
+
+-- stopInvisibility 也需要恢复倒立状态
+local function stopInvisibility()
+    State.isInvisibilityEnabled = false
+    if State.invisibilityConnection then State.invisibilityConnection:Disconnect(); State.invisibilityConnection = nil end
+    if State.invisibilityHighlight then State.invisibilityHighlight:Destroy(); State.invisibilityHighlight = nil end
+    if State.invisibilityRealChar and State.invisibilityRealChar.Parent then
+        player.Character = State.invisibilityRealChar
+        camera.CameraSubject = State.invisibilityRealChar:FindFirstChildOfClass("Humanoid")
+        if State.invisibilityClone and State.invisibilityClone:FindFirstChild("HumanoidRootPart") and State.invisibilityRealChar:FindFirstChild("HumanoidRootPart") then
+            State.invisibilityRealChar:PivotTo(State.invisibilityClone:FindFirstChild("HumanoidRootPart").CFrame)
+        end
+        for _, part in ipairs(State.invisibilityRealChar:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = true end end
+    end
+    if State.invisibilityClone then State.invisibilityClone:Destroy(); State.invisibilityClone = nil end
+    Notification.new({Title = "隐身", Content = "已关闭", Duration = 2})
+end
+
+local function stopInvisibility()
+    State.isInvisibilityEnabled = false
+    if State.invisibilityConnection then State.invisibilityConnection:Disconnect(); State.invisibilityConnection = nil end
+    if State.invisibilityHighlight then State.invisibilityHighlight:Destroy(); State.invisibilityHighlight = nil end
+    if State.invisibilityRealChar and State.invisibilityRealChar.Parent then
+        player.Character = State.invisibilityRealChar; camera.CameraSubject = State.invisibilityRealChar:FindFirstChildOfClass("Humanoid")
+        if State.invisibilityClone and State.invisibilityClone:FindFirstChild("HumanoidRootPart") and State.invisibilityRealChar:FindFirstChild("HumanoidRootPart") then
+            State.invisibilityRealChar:PivotTo(State.invisibilityClone:FindFirstChild("HumanoidRootPart").CFrame)
+        end
+        for _, part in ipairs(State.invisibilityRealChar:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = true end end
+    end
+    if State.invisibilityClone then State.invisibilityClone:Destroy(); State.invisibilityClone = nil end
+    Notification.new({Title = "隐身", Content = "已关闭", Duration = 2})
+end
+
+local function toggleInvisibility(enabled)
+    if enabled then startInvisibility() else stopInvisibility() end
+end
+
+-- Fast Interact
+local function setFastInteract(status)
+    State.isFastInteract=status
+    if status then
+        if State.interactConnection then State.interactConnection:Disconnect() end
+        State.interactConnection=ProximityPromptService.PromptButtonHoldBegan:Connect(function(p)
+            if not p:GetAttribute("oHT") then p:SetAttribute("oHT",p.HoldDuration) end
+            if not p:GetAttribute("oMD") then p:SetAttribute("oMD",p.MaxActivationDistance) end
+            p.HoldDuration=0; p.MaxActivationDistance=State.interactDistance
+        end)
+        for _,p in ipairs(game:GetDescendants()) do
+            if p:IsA("ProximityPrompt") then
+                if not p:GetAttribute("oHT") then p:SetAttribute("oHT",p.HoldDuration) end
+                if not p:GetAttribute("oMD") then p:SetAttribute("oMD",p.MaxActivationDistance) end
+                p.HoldDuration=0; p.MaxActivationDistance=State.interactDistance
+            end
+        end
+    else
+        if State.interactConnection then State.interactConnection:Disconnect(); State.interactConnection=nil end
+        pcall(function()
+            for _,p in ipairs(game:GetDescendants()) do
+                if p and p.Parent and p:IsA("ProximityPrompt") then pcall(function()
+                    local o=p:GetAttribute("oHT"); if o then p.HoldDuration=o; p:SetAttribute("oHT",nil) end
+                    local d=p:GetAttribute("oMD"); if d then p.MaxActivationDistance=d; p:SetAttribute("oMD",nil) end
+                end) end
+            end
+        end)
+    end
+end
+
+-- Auto Interact
+local function toggleAutoInteract(enabled)
+    State.isAutoInteractEnabled=enabled; if State.autoInteractConnection then State.autoInteractConnection:Disconnect(); State.autoInteractConnection=nil end
+    if enabled then local lt=0; State.autoInteractConnection=RunService.Heartbeat:Connect(function()
+        local r=hrp(); if not r then return end; if tick()-lt<State.autoInteractDelay then return end
+        local cp,cd=nil,State.autoInteractRange
+        for _,p in ipairs(workspace:GetDescendants()) do if p:IsA("ProximityPrompt") then local d=(p.Parent.Position-r.Position).Magnitude; if d<cd then cd=d; cp=p end end end
+        if cp then pcall(function() cp:InputHoldBegin(); task.wait(0); cp:InputHoldEnd() end); lt=tick() end end) end
+end
+
+-- Auto Pickup
+local function isPickupable(item)
+    if not item or not item:IsA("BasePart") then return false end; if not item:IsDescendantOf(Workspace) then return false end
+    for _, bl in ipairs(State.pickupBlacklist) do if item.Name == bl then return false end end
+    if item.Anchored then return false end; if item.Parent and item.Parent:IsA("Model") and item.Parent.PrimaryPart == item then return false end
+    if item:FindFirstChildOfClass("ProximityPrompt") or item:FindFirstChildOfClass("Tool") or item:FindFirstChildOfClass("ClickDetector") then return true end
+    return false
+end
+
+local function pickupItem(item)
+    if not item or not item.Parent then return end; local r = hrp(); if not r then return end
+    if (item.Position - r.Position).Magnitude > State.autoPickupRange then return end
+    pcall(function() local prompt = item:FindFirstChildOfClass("ProximityPrompt"); if prompt then prompt:InputHoldBegin(); task.wait(0); prompt:InputHoldEnd(); return end end)
+    pcall(function() local cd = item:FindFirstChildOfClass("ClickDetector"); if cd then fireclickdetector(cd); return end end)
+    pcall(function() local tool = item:FindFirstChildOfClass("Tool"); if tool and r then local oldPos = r.Position; r.CFrame = CFrame.new(item.Position + Vector3.new(0, 3, 0)); task.wait(0.05); pcall(function() tool.Parent = player.Backpack end); task.wait(0.05); r.CFrame = CFrame.new(oldPos) end end)
+end
+
+local function pickupAllInRange()
+    local r = hrp(); if not r then return end; local items = {}
+    for _, item in ipairs(Workspace:GetDescendants()) do if isPickupable(item) then local dist = (item.Position - r.Position).Magnitude; if dist <= State.autoPickupRange then table.insert(items, {item = item, dist = dist}) end end end
+    table.sort(items, function(a, b) return a.dist < b.dist end); local count = 0
+    for _, data in ipairs(items) do pickupItem(data.item); count = count + 1 end
+    Notification.new({Title = "拾取完成", Content = count > 0 and ("拾取了 " .. count .. " 件") or "无物品", Duration = 2})
+end
+
+local function toggleAutoPickup(enabled)
+    State.isAutoPickupEnabled = enabled; if State.autoPickupConnection then State.autoPickupConnection:Disconnect(); State.autoPickupConnection = nil end
+    if enabled then local lastPickup = 0; State.autoPickupConnection = RunService.Heartbeat:Connect(function()
+        if tick() - lastPickup < State.autoPickupDelay then return end; lastPickup = tick(); local r = hrp(); if not r then return end
+        for _, item in ipairs(Workspace:GetDescendants()) do if isPickupable(item) and (item.Position - r.Position).Magnitude <= State.autoPickupRange then pickupItem(item); break end end end) end
+end
+
+-- Equip/Unequip Tools
+local function equipAllTools()
+    local c = char(); if not c then Notification.new({Title = "装备失败", Content = "没有角色", Duration = 2}); return end
+    local backpack = player:FindFirstChild("Backpack"); if not backpack then Notification.new({Title = "装备失败", Content = "没有背包", Duration = 2}); return end
+    local tools = {}; for _, item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") then table.insert(tools, item) end end
+    if #tools == 0 then Notification.new({Title = "背包为空", Content = "没有工具", Duration = 2}); return end
+    local count = 0; for _, tool in ipairs(tools) do pcall(function() tool.Parent = c; count = count + 1 end); task.wait(0.05) end
+    Notification.new({Title = "装备完成", Content = "装备了 " .. count .. " 个工具", Duration = 2})
+end
+
+local function unequipAllTools()
+    local c = char(); if not c then Notification.new({Title = "卸下失败", Content = "没有角色", Duration = 2}); return end
+    local backpack = player:FindFirstChild("Backpack"); if not backpack then Notification.new({Title = "卸下失败", Content = "没有背包", Duration = 2}); return end
+    local tools = {}; for _, item in ipairs(c:GetChildren()) do if item:IsA("Tool") then table.insert(tools, item) end end
+    if #tools == 0 then Notification.new({Title = "没有工具", Content = "角色未装备工具", Duration = 2}); return end
+    local count = 0; for _, tool in ipairs(tools) do pcall(function() tool.Parent = backpack; count = count + 1 end); task.wait(0.05) end
+    Notification.new({Title = "卸下完成", Content = "卸下了 " .. count .. " 个工具", Duration = 2})
+end
+
+local function listBackpackTools()
+    local backpack = player:FindFirstChild("Backpack"); if not backpack then Notification.new({Title = "没有背包", Content = "", Duration = 2}); return end
+    local tools = {}; for _, item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") then table.insert(tools, item.Name) end end
+    if #tools == 0 then Notification.new({Title = "背包为空", Content = "没有工具", Duration = 2})
+    else print("========== 背包工具列表 =========="); for i, name in ipairs(tools) do print(i .. ". " .. name) end
+        print("共 " .. #tools .. " 个工具"); Notification.new({Title = "背包工具", Content = "共 " .. #tools .. " 个", Duration = 3}) end
+end
+
+-- Custom FOV
+local function toggleCustomFOV(enabled)
+    State.customFOVEnabled = enabled; if State.fovConnection then State.fovConnection:Disconnect(); State.fovConnection = nil end
+    if enabled then State.originalFOV = camera.FieldOfView; camera.FieldOfView = State.customFOV
+        State.fovConnection = RunService.RenderStepped:Connect(function() if State.customFOVEnabled and camera.FieldOfView ~= State.customFOV then camera.FieldOfView = State.customFOV end end)
+    elseif State.originalFOV then camera.FieldOfView = State.originalFOV end
+end
+
+-- Night Vision
+local function toggleNightVision(enabled)
+    State.nightVisionEnabled = enabled
+    if State.nightVisionConnection then State.nightVisionConnection:Disconnect(); State.nightVisionConnection = nil end
+    local l = game:GetService("Lighting")
+    if enabled then
+        l.Ambient = Color3.new(1, 1, 1)
+        State.nightVisionConnection = RunService.RenderStepped:Connect(function()
+            if State.nightVisionEnabled then l.Ambient = Color3.new(1, 1, 1) end
+        end)
+    else l.Ambient = Color3.new(0, 0, 0) end
+end
+
+-- Vehicle Boost/Jump
+local function toggleVehicleBoost(enabled)
+    State.vehicleBoostEnabled = enabled; if State.vehicleBoostConnection then State.vehicleBoostConnection:Disconnect(); State.vehicleBoostConnection = nil end
+    if enabled then State.vehicleBoostConnection = RunService.Heartbeat:Connect(function()
+        if not State.vehicleBoostEnabled then return end; local vehicle = getVehicle(); if not vehicle then return end
+        local primary = vehicle.PrimaryPart or vehicle:FindFirstChildWhichIsA("BasePart"); if not primary then return end
+        if UIS:IsKeyDown(Enum.KeyCode.W) then local lookVector = primary.CFrame.LookVector; primary.Velocity = lookVector * (primary.Velocity.Magnitude * State.vehicleBoostMultiplier / 20) end end) end
+end
+
+local function vehicleJump()
+    local vehicle = getVehicle(); if not vehicle then Notification.new({Title = "车辆跳跃", Content = "未在载具中", Duration = 2}); return end
+    local primary = vehicle.PrimaryPart or vehicle:FindFirstChildWhichIsA("BasePart"); if not primary then return end
+    primary.Velocity = primary.Velocity + Vector3.new(0, State.vehicleJumpPower, 0)
+end
+
+local function toggleVehicleAutoJump(enabled)
+    State.vehicleJumpEnabled = enabled; if State.vehicleJumpConnection then State.vehicleJumpConnection:Disconnect(); State.vehicleJumpConnection = nil end
+    if enabled then State.vehicleJumpConnection = RunService.Heartbeat:Connect(function()
+        if not State.vehicleJumpEnabled then return end; if UIS:IsKeyDown(Enum.KeyCode.Space) then local vehicle = getVehicle(); if not vehicle then return end
+            local primary = vehicle.PrimaryPart or vehicle:FindFirstChildWhichIsA("BasePart"); if not primary then return end
+            primary.Velocity = primary.Velocity + Vector3.new(0, State.vehicleJumpPower * 0.3, 0) end end) end
+end
+
+-- Smart Wall Phase
+local function isWallPart(part)
+    if not part or not part:IsA("BasePart") or not part.CanCollide then return false end
+    for _,plr in ipairs(Players:GetPlayers()) do if plr.Character and part:IsDescendantOf(plr.Character) then return false end end
+    local s=part.Size; if s.Y<2 and (s.X>10 or s.Z>10) then return false end; return part.Transparency<=0.9
+end
+
+local function restoreAllWalls()
+    for part,data in pairs(State.wallPhaseSettings.processedWalls) do pcall(function() if part and part.Parent then part.CanCollide=data.originalCanCollide end end) end
+    State.wallPhaseSettings.processedWalls={}
+end
+
+local function cleanupWallCache()
+    local ct=tick(); if ct-State.wallPhaseSettings.lastCleanupTime<1 then return end; State.wallPhaseSettings.lastCleanupTime=ct
+    for part,data in pairs(State.wallPhaseSettings.processedWalls) do if not part or not part.Parent then State.wallPhaseSettings.processedWalls[part]=nil
+        elseif ct-data.lastProcessed>State.wallPhaseSettings.wallCacheTimeout then pcall(function() if part and part.Parent then part.CanCollide=data.originalCanCollide end end); State.wallPhaseSettings.processedWalls[part]=nil end end
+end
+
+local function enableWallPhase()
+    local c=char(); if not c then return end; local head=c:FindFirstChild("Head"); if not head then return end
+    local origin=head.Position+Vector3.new(0,State.wallPhaseSettings.headHeightOffset,0)
+    local rp=RaycastParams.new(); rp.FilterType=Enum.RaycastFilterType.Blacklist; rp.FilterDescendantsInstances={c}
+    for i=0,State.wallPhaseSettings.rayCount-1 do local a=(i/State.wallPhaseSettings.rayCount)*math.pi*2; local dir=Vector3.new(math.cos(a),0,math.sin(a))
+        local res=workspace:Raycast(origin,dir*State.wallPhaseSettings.rayLength,rp)
+        if res and isWallPart(res.Instance) then local part=res.Instance
+            if not State.wallPhaseSettings.processedWalls[part] then State.wallPhaseSettings.processedWalls[part]={originalCanCollide=part.CanCollide,lastProcessed=tick()}; part.CanCollide=false
+            else State.wallPhaseSettings.processedWalls[part].lastProcessed=tick() end end end; cleanupWallCache()
+end
+
+local function toggleNoClip(enabled)
+    State.isNoClipEnabled=enabled; if State.noClipConnection then State.noClipConnection:Disconnect(); State.noClipConnection=nil end
+    if enabled then State.wallPhaseSettings.processedWalls={}; State.wallPhaseSettings.lastCleanupTime=tick(); local lu=0
+        State.noClipConnection=RunService.Heartbeat:Connect(function() if tick()-lu<State.wallPhaseSettings.updateInterval then return end; lu=tick()
+            local h=hum(); if not h or h.Health<=0 then if next(State.wallPhaseSettings.processedWalls) then restoreAllWalls() end; return end; enableWallPhase() end) else restoreAllWalls() end
+end
+
+-- Spin/Fly/LeftClick/KillAura
+local function toggleSpin(enabled)
+    State.isSpinEnabled=enabled; if State.spinConnection then State.spinConnection:Disconnect(); State.spinConnection=nil end
+    if enabled then State.spinConnection=RunService.Heartbeat:Connect(function() local r=hrp(); if r then r.CFrame=r.CFrame*CFrame.Angles(0,math.rad(State.spinSpeed),0) end end) end
+end
+
+local function toggleFly(enabled)
+    State.flyEnabled=enabled; if State.flyConnection then State.flyConnection:Disconnect(); State.flyConnection=nil end
+    if enabled then State.flyConnection=RunService.Heartbeat:Connect(function()
+        local c=char(); if not c then return end; local r=hrp(); if not r then return end; local h=hum(); if not h then return end
+        h:SetStateEnabled(Enum.HumanoidStateType.FallingDown,false); h:SetStateEnabled(Enum.HumanoidStateType.Freefall,false); local md=Vector3.new()
+        if UIS:IsKeyDown(Enum.KeyCode.W) then md+=camera.CFrame.LookVector end; if UIS:IsKeyDown(Enum.KeyCode.S) then md-=camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then md-=camera.CFrame.RightVector end; if UIS:IsKeyDown(Enum.KeyCode.D) then md+=camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.E) then md+=Vector3.new(0,1,0) end; if UIS:IsKeyDown(Enum.KeyCode.Q) then md-=Vector3.new(0,1,0) end
+        if md.Magnitude>0 then md=md.Unit end; r.Velocity=md*State.flySpeed end) else local c=char(); if c then local h=hum(); if h then h:SetStateEnabled(Enum.HumanoidStateType.FallingDown,true); h:SetStateEnabled(Enum.HumanoidStateType.Freefall,true) end end end
+end
+
+local function toggleLeftClickDelete(enabled)
+    State.isLeftClickDeleteEnabled=enabled; if State.leftClickDeleteConnection then State.leftClickDeleteConnection:Disconnect(); State.leftClickDeleteConnection=nil end
+    if enabled then State.leftClickDeleteConnection=UIS.InputBegan:Connect(function(input,processed) if processed then return end        if input.UserInputType==Enum.UserInputType.MouseButton1 then local t=mouse.Target; if t and t:IsDescendantOf(Workspace) then local ip=false
+            for _,plr in ipairs(Players:GetPlayers()) do if plr.Character and t:IsDescendantOf(plr.Character) then ip=true; break end end; if not ip then t:Destroy() end end end end) end
+end
+
+local function toggleKillAura(enabled)
+    State.isKillAuraEnabled=enabled; if State.killAuraConnection then State.killAuraConnection:Disconnect(); State.killAuraConnection=nil end
+    if enabled then State.killAuraConnection=RunService.Heartbeat:Connect(function()
+        local c=char(); if not c then return end; local h=hum(); if not h or h.Health<=0 then return end
+        if tick()-State.lastKillAuraAttackTime<State.killAuraDelay then return end; local r=hrp(); if not r then return end
+        local ha=false; local tool=c:FindFirstChildOfClass("Tool"); if not tool then return end
+        if State.killAuraTargetPlayer then for _,op in ipairs(Players:GetPlayers()) do if op==player then continue end; local tc=op.Character; if not tc then continue end
+            local th=tc:FindFirstChildOfClass("Humanoid"); if not th or th.Health<=0 then continue end; local trp=tc:FindFirstChild("HumanoidRootPart"); if not trp then continue end
+            if (r.Position-trp.Position).Magnitude>State.killAuraRange then continue end; if getgenv().ScriptState.aimLockTeamCheck and playersOnSameTeam(op) then continue end
+            pcall(function() tool:Activate(); mouse.Target=trp; mouse:Click(); ha=true end); if ha then break end end end
+        if State.killAuraTargetNPC and not ha then for _,m in ipairs(Workspace:GetDescendants()) do if not m:IsA("Model") or m==c then continue end; local ip=false
+            for _,plr in ipairs(Players:GetPlayers()) do if plr.Character==m then ip=true; break end end; if ip then continue end
+            local th=m:FindFirstChildOfClass("Humanoid"); if not th or th.Health<=0 then continue end; local trp=m:FindFirstChild("HumanoidRootPart"); if not trp then continue end
+            if (r.Position-trp.Position).Magnitude>State.killAuraRange then continue end; pcall(function() tool:Activate(); mouse.Target=trp; mouse:Click(); ha=true end); if ha then break end end end
+        if ha then State.lastKillAuraAttackTime=tick() end end) end
+end
+
+-- Hitbox Expander (范围)
+for _, partName in ipairs(State.hitboxBodyParts) do State.hitboxSizes[partName] = 0 end
+local function hitboxSaveProps(part)
+    if part and not State.hitboxOriginalProps[part] then
+        State.hitboxOriginalProps[part] = {Size = part.Size, Transparency = part.Transparency, CanCollide = part.CanCollide, Massless = part.Massless}
+    end
+end
+local function hitboxRestoreProps(part)
+    local p = State.hitboxOriginalProps[part]
+    if p then part.Size = p.Size; part.Transparency = p.Transparency; part.CanCollide = p.CanCollide; part.Massless = p.Massless end
+end
+local function applyHitboxMod(part, size)
+    if not part then return end; hitboxSaveProps(part)
+    if size <= 0.01 then hitboxRestoreProps(part); return end
+    local s = math.max(size, 0.1); part.Size = Vector3.new(s, s, s); part.Transparency = 0.5; part.CanCollide = false; part.Massless = true
+end
+local function applyHitboxModWithVisibility(part, size, isPlayer)
+    if not part then return end; hitboxSaveProps(part)
+    if size <= 0.01 then hitboxRestoreProps(part); return end
+    local show = isPlayer and State.hitboxShowPlayerBox or State.hitboxShowNPCBox
+    local s = math.max(size, 0.1); part.Size = Vector3.new(s, s, s)
+    part.Transparency = show and 0.5 or 1; part.CanCollide = false; part.Massless = true
+end
+local function updateHitboxChar(character)
+    if not character or not State.hitboxEnabled then return end
+    local h = character:FindFirstChildOfClass("Humanoid"); if not h or h.Health <= 0 then return end
+    local isPlayer = Players:GetPlayerFromCharacter(character) ~= nil
+    for partName, size in pairs(State.hitboxSizes) do
+        local part = character:FindFirstChild(partName)
+        if part then applyHitboxModWithVisibility(part, size, isPlayer) end
+    end
+end
+local function updateAllHitboxes()
+    if not State.hitboxEnabled then return end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then updateHitboxChar(p.Character) end
+    end
+end
+local function refreshHitboxVisibility()
+    if not State.hitboxEnabled then return end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then updateHitboxChar(p.Character) end
+    end
+end
+local function setupHitboxTracking(targetPlayer)
+    if targetPlayer == player then return end
+    targetPlayer.CharacterAdded:Connect(function(c)
+        task.wait(0.5); updateHitboxChar(c)
+        local h = c:WaitForChild("Humanoid")
+        h:GetPropertyChangedSignal("Health"):Connect(function()
+            if h.Health > 0 then task.wait(0.2); updateHitboxChar(c) end
+        end)
+    end)
+    if targetPlayer.Character then updateHitboxChar(targetPlayer.Character) end
+end
+local function resetAllHitboxes()
+    for partName, _ in pairs(State.hitboxSizes) do State.hitboxSizes[partName] = 0 end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local c = p.Character; local h = c:FindFirstChildOfClass("Humanoid")
+            if h and h.Health > 0 then
+                for partName in pairs(State.hitboxSizes) do
+                    local part = c:FindFirstChild(partName)
+                    if part then hitboxRestoreProps(part) end
+                end
+            end
+        end
+    end
+end
+
+-- Hitbox Range Display
+local function createHitboxRangeCircle()
+    if not Drawing then return nil end
+    local c = Drawing.new("Circle")
+    c.Visible = false; c.Thickness = 1.5; c.Radius = 5; c.Filled = false
+    c.Color = Color3.fromRGB(255, 255, 0); c.Transparency = 0.7
+    return c
+end
+
+local function toggleHitboxRangeDisplay(enabled)
+    State.hitboxShowRange = enabled
+    if not enabled then
+        if State.hitboxRangeConnection then
+            State.hitboxRangeConnection:Disconnect(); State.hitboxRangeConnection = nil
+        end
+        for _, circles in pairs(State.hitboxRangeCircles) do for _, circ in pairs(circles) do pcall(function() circ:Remove() end) end end
+        State.hitboxRangeCircles = {}
+        return
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == player then continue end
+        local circles = {}
+        for _, partName in ipairs(State.hitboxBodyParts) do
+            local c = createHitboxRangeCircle(); circles[partName] = c
+        end
+        State.hitboxRangeCircles[p] = circles
+    end
+    State.hitboxRangeConnection = RunService.Heartbeat:Connect(function()
+        for p, circles in pairs(State.hitboxRangeCircles) do
+            local tc = p.Character
+            if not tc then for _, c in pairs(circles) do c.Visible = false end; continue end
+            local h = tc:FindFirstChildOfClass("Humanoid")
+            if not h or h.Health <= 0 then for _, c in pairs(circles) do c.Visible = false end; continue end
+            for partName, circ in pairs(circles) do
+                local part = tc:FindFirstChild(partName)
+                local size = State.hitboxSizes[partName]
+                if part and size and size > 0 then
+                    local sp, on = camera:WorldToViewportPoint(part.Position)
+                    if on then
+                        circ.Visible = true; circ.Position = Vector2.new(sp.X, sp.Y)
+                        circ.Radius = size * 0.5
+                        circ.Thickness = 1 + size * 0.04
+                    else
+                        circ.Visible = false
+                    end
+                else
+                    circ.Visible = false
+                end
+            end
+        end
+    end)
+end
+
+local function addHitboxRangeCircleForPlayer(p)
+    if not State.hitboxShowRange then return end
+    local circles = {}
+    for _, partName in ipairs(State.hitboxBodyParts) do
+        local c = createHitboxRangeCircle(); circles[partName] = c
+    end
+    State.hitboxRangeCircles[p] = circles
+end
+
+local function removeHitboxRangeCircleForPlayer(p)
+    local circles = State.hitboxRangeCircles[p]
+    if circles then for _, c in pairs(circles) do pcall(function() c:Remove() end) end end
+    State.hitboxRangeCircles[p] = nil
+end
+
+-- NPC Collision
+local function toggleNpcCollision(disabled)
+    State.npcCollisionDisabled = disabled
+    if disabled then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            local h = obj:FindFirstChildOfClass("Humanoid")
+            if h and not Players:GetPlayerFromCharacter(obj.Parent) then
+                for _, part in ipairs(obj.Parent:GetDescendants()) do
+                    if part:IsA("BasePart") and not part:IsA("Terrain") then
+                        State.npcCollisionOriginalProps[part] = part.CanCollide
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end
+    else
+        for part, orig in pairs(State.npcCollisionOriginalProps) do
+            pcall(function() part.CanCollide = orig end)
+        end
+        State.npcCollisionOriginalProps = {}
+    end
+end
+
+-- Teleport Sky
+local function teleportToSky() local r=hrp(); if r then r.CFrame=CFrame.new(r.Position.X,720,r.Position.Z) end end
+
+-- Auto Attack
+local function toggleAutoAttack(enabled)
+    State.isAutoAttackEnabled=enabled; if State.autoAttackConnection then State.autoAttackConnection:Disconnect(); State.autoAttackConnection=nil end
+    if enabled then local lat=0; State.autoAttackConnection=RunService.Heartbeat:Connect(function()
+        local c=char(); if not c then return end; local h=hum(); if not h or h.Health<=0 then return end
+        if tick()-lat<State.autoAttackDelay then return end; local cp=nil
+        if State.autoAttackLockPlayer then
+            for _, op in ipairs(Players:GetPlayers()) do
+                if op ~= player and (op.Name == State.autoAttackLockPlayer or op.DisplayName == State.autoAttackLockPlayer) then
+                    local tc = op.Character
+                    if tc then local th = tc:FindFirstChildOfClass("Humanoid"); local trp = tc:FindFirstChild("HumanoidRootPart")
+                        if th and trp and th.Health > 0 then local r = hrp()
+                            if r and (r.Position - trp.Position).Magnitude <= State.autoAttackRange then cp = op end
+                        end
+                    end
+                    break
+                end
+            end
+        end
+        if not cp then local lh = math.huge
+            for _, op in ipairs(Players:GetPlayers()) do
+                if op == player then continue end; local tc = op.Character; if not tc then continue end
+                local th = tc:FindFirstChildOfClass("Humanoid"); if not th or th.Health <= 0 then continue end
+                local trp = tc:FindFirstChild("HumanoidRootPart"); if not trp then continue end
+                local r = hrp(); if not r then continue end
+                if (r.Position - trp.Position).Magnitude > State.autoAttackRange then continue end
+                if getgenv().ScriptState.aimLockTeamCheck and playersOnSameTeam(op) then continue end
+                if th.Health < lh then lh = th.Health; cp = op end
+            end
+        end
+        if cp then local tc=cp.Character; if tc then pcall(function() local r=hrp(); if not r then return end; local trp=tc:FindFirstChild("HumanoidRootPart"); if not trp then return end
+            if State.teleportMode=="behind" then r.CFrame=CFrame.new(trp.Position-trp.CFrame.LookVector*5,trp.Position)
+            elseif State.teleportMode=="feet" then r.CFrame=CFrame.new(trp.Position-Vector3.new(0,5,0),trp.Position)
+            elseif State.teleportMode=="head" then r.CFrame=CFrame.new(trp.Position+Vector3.new(0,5,0),trp.Position)
+            else State.attackRotationAngle=(State.attackRotationAngle+State.attackRotationSpeed)%360; local a=math.rad(State.attackRotationAngle); r.CFrame=CFrame.new(trp.Position+Vector3.new(math.cos(a)*5,0,math.sin(a)*5),trp.Position) end; lat=tick() end) end end end) end
+end
+
+-- Attack Range Display
+local function toggleAttackRangeVisible(enabled)
+    State.isAttackRangeVisible=enabled; if State.attackRangeIndicator then State.attackRangeIndicator:Destroy(); State.attackRangeIndicator=nil end
+    if State.attackRangeConnection then State.attackRangeConnection:Disconnect(); State.attackRangeConnection=nil end
+    if enabled then local ri=Instance.new("Part"); ri.Name="ARI"; ri.Shape=Enum.PartType.Ball; ri.Size=Vector3.new(State.autoAttackRange*2,State.autoAttackRange*2,State.autoAttackRange*2)
+        ri.Color=Color3.fromRGB(255,0,0); ri.Transparency=0.7; ri.Material=Enum.Material.Neon; ri.CanCollide=false; ri.Anchored=true; ri.Parent=Workspace; State.attackRangeIndicator=ri
+        State.attackRangeConnection=RunService.Heartbeat:Connect(function() local r=hrp(); if r and State.attackRangeIndicator then State.attackRangeIndicator.Position=r.Position end end) end
+end
+
+-- FOV Display
+local function toggleAimFov(enabled)
+    State.aimFovEnabled=enabled; if State.aimFovIndicator then State.aimFovIndicator:Remove(); State.aimFovIndicator=nil end
+    if State.aimFovConnection then State.aimFovConnection:Disconnect(); State.aimFovConnection=nil end
+    if enabled then local fc=Drawing.new("Circle"); fc.Thickness=2; fc.Color=Color3.fromRGB(255,255,255); fc.Filled=false; fc.NumSides=64
+        fc.Radius=State.aimFovRadius; fc.Visible=true; fc.Transparency=0.7; State.aimFovIndicator=fc
+        State.aimFovConnection=RunService.RenderStepped:Connect(function()
+            if not State.aimFovIndicator or not State.aimFovEnabled then if State.aimFovConnection then State.aimFovConnection:Disconnect(); State.aimFovConnection=nil end; return end
+            if State.aimFovFollowMouse then State.aimFovIndicator.Position=UIS:GetMouseLocation() else State.aimFovIndicator.Position=Vector2.new(camera.ViewportSize.X/2,camera.ViewportSize.Y/2) end
+            State.aimFovIndicator.Radius=State.aimFovRadius end) end
+end
+
+-- Enhanced Mouse Aimbot (Fully Independent)
+local function isAimTargetVisible(targetPos)
+    if not State.aimMouseVisibleCheck then return true end
+    local c = char(); if not c then return false end
+    local ro = camera.CFrame.Position
+    local rd = (targetPos - ro).Unit * 1000
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    rayParams.FilterDescendantsInstances = {c}
+    local rr = Workspace:Raycast(ro, rd, rayParams)
+    if rr then
+        local t = State.aimMouseTarget
+        if t and t.Character and rr.Instance:IsDescendantOf(t.Character) then return true end
+        return false
+    end
+    return true
+end
+local function getMousePredictedPosition(targetPart)
+    local v = targetPart.AssemblyLinearVelocity or targetPart.Velocity
+    if not v or v.Magnitude == 0 then return targetPart.Position end
+    return targetPart.Position + v * (State.aimMousePredictionAmount or 0.165)
+end
+local function getClosestPlayerToMouse()
+    local mousePos = UIS:GetMouseLocation()
+    local closest, closestDist = nil, State.aimMouseFOVRadius
+    for _, tp in ipairs(Players:GetPlayers()) do
+        if tp == player then continue end
+        if State.aimMouseTeamCheck and playersOnSameTeam(tp) then continue end
+        local tc = tp.Character; if not tc then continue end
+        local h = tc:FindFirstChildOfClass("Humanoid"); if not h or h.Health <= 0 then continue end
+        local part = tc:FindFirstChild(State.aimMouseBodyPart or "Head")
+        if not part then continue end
+        local sp, on = camera:WorldToViewportPoint(part.Position)
+        if not on then continue end
+        local sd = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
+        if sd < closestDist then closestDist = sd; closest = tp end
+    end
+    return closest
+end
+local function mouseAimAtTarget(target)
+    if not target or not target.Character then return end
+    local part = target.Character:FindFirstChild(State.aimMouseBodyPart or "Head")
+    if not part then return end
+    local tp = getMousePredictedPosition(part)
+    if not isAimTargetVisible(tp) then State.aimMouseTarget = nil; return end
+    local mousePos = UIS:GetMouseLocation()
+    local sp, on = camera:WorldToViewportPoint(tp)
+    if not on then return end
+    local st = Vector2.new(sp.X, sp.Y)
+    local smoothFactor = math.min(1, 1 / (State.aimMouseSmoothSpeed or 5))
+    local newPos = mousePos:Lerp(st, smoothFactor)
+    safeMouseMoveRel((newPos.X - mousePos.X) / ((State.aimMouseSmoothSpeed or 5) * 0.5), (newPos.Y - mousePos.Y) / ((State.aimMouseSmoothSpeed or 5) * 0.5))
+    if State.aimMouseAutoFire then safeMouse1Press() end
+end
+local function releaseAimAutoFire()
+    pcall(safeMouse1Release)
+end
+local function toggleMouseAim()
+    if not State.aimMouseEnabled then return end
+    State.aimMouseToggled = not State.aimMouseToggled
+    if State.aimMouseToggled then State.aimMouseTarget = getClosestPlayerToMouse()
+    else State.aimMouseTarget = nil; releaseAimAutoFire() end
+end
+local function startMouseAimbot()
+    if State.aimMouseConnection then State.aimMouseConnection:Disconnect() end
+    if not State.aimMouseFovCircle and State.aimMouseShowFOV then
+        local fc = Drawing.new("Circle"); fc.Thickness = 1.5; fc.Color = Color3.fromRGB(255, 255, 255); fc.Transparency = 0.5
+        fc.Filled = false; fc.NumSides = 64; fc.Radius = State.aimMouseFOVRadius; fc.Visible = true; State.aimMouseFovCircle = fc
+    end
+    State.aimMouseConnection = RunService.RenderStepped:Connect(function()
+        if State.aimMouseFovCircle then
+            State.aimMouseFovCircle.Radius = State.aimMouseFOVRadius
+            State.aimMouseFovCircle.Visible = State.aimMouseShowFOV and State.aimMouseEnabled
+            State.aimMouseFovCircle.Position = UIS:GetMouseLocation()
+        end
+        if not State.aimMouseEnabled then return end
+        if State.aimMouseMode == "Mouse" and State.aimMouseToggled then
+            if not State.aimMouseTarget or not State.aimMouseTarget.Character then State.aimMouseTarget = getClosestPlayerToMouse() end
+            if State.aimMouseTarget then
+                local h = State.aimMouseTarget.Character:FindFirstChildOfClass("Humanoid")
+                if h and h.Health > 0 then mouseAimAtTarget(State.aimMouseTarget)
+                else State.aimMouseTarget = nil; releaseAimAutoFire() end
+            else releaseAimAutoFire() end
+        end
+        if State.aimMouseMode == "Camera" and State.aimMouseRightHeld then
+            if not State.aimMouseTarget or not State.aimMouseTarget.Character then State.aimMouseTarget = getClosestPlayerToMouse() end
+            if State.aimMouseTarget then
+                local h = State.aimMouseTarget.Character:FindFirstChildOfClass("Humanoid")
+                if h and h.Health > 0 then mouseAimAtTarget(State.aimMouseTarget)
+                else State.aimMouseTarget = nil; releaseAimAutoFire() end
+            else releaseAimAutoFire() end
+        end
+    end)
+end
+local function stopMouseAimbot()
+    if State.aimMouseConnection then State.aimMouseConnection:Disconnect(); State.aimMouseConnection = nil end
+    if State.aimMouseFovCircle then State.aimMouseFovCircle:Remove(); State.aimMouseFovCircle = nil end
+    releaseAimAutoFire(); State.aimMouseTarget = nil; State.aimMouseToggled = false; State.aimMouseRightHeld = false
+end
+
+-- Silent Aim Visuals
+local function updateSilentAimVisuals()
+    if State.silentAimFovCircle then State.silentAimFovCircle:Remove(); State.silentAimFovCircle=nil end
+    if State.silentAimFovConnection then State.silentAimFovConnection:Disconnect(); State.silentAimFovConnection=nil end
+    if State.silentAimTracerLine then State.silentAimTracerLine:Remove(); State.silentAimTracerLine=nil end
+    if State.silentAimEnabled then
+        if State.silentAimShowFOV then local circle=Drawing.new("Circle"); circle.Thickness=2; circle.Color=Color3.fromRGB(0,255,100)
+            circle.Filled=false; circle.NumSides=64; circle.Radius=State.silentAimFOV; circle.Visible=true; circle.Transparency=0.6; State.silentAimFovCircle=circle end
+        if State.silentAimShowTracer then local tracer=Drawing.new("Line"); tracer.Visible=false; tracer.Thickness=State.silentAimTracerThickness; State.silentAimTracerLine=tracer end
+        State.silentAimFovConnection=RunService.RenderStepped:Connect(function()
+            if not State.silentAimEnabled then if State.silentAimFovConnection then State.silentAimFovConnection:Disconnect(); State.silentAimFovConnection=nil end; return end
+            if State.silentAimFovCircle then if State.silentAimFovFollowMouse then State.silentAimFovCircle.Position=UIS:GetMouseLocation() else State.silentAimFovCircle.Position=Vector2.new(camera.ViewportSize.X/2,camera.ViewportSize.Y/2) end
+                State.silentAimFovCircle.Radius=State.silentAimFOV; State.silentAimFovCircle.Color=State.silentAimTargetPart and Color3.fromRGB(255,50,50) or Color3.fromRGB(0,255,100) end
+            if State.silentAimTracerLine then if State.silentAimTargetPart and State.silentAimTargetPart.Parent then local targetPos=State.silentAimTargetPart.Position; local screenPos,onScreen=camera:WorldToViewportPoint(targetPos)
+                if onScreen then State.silentAimTracerLine.From=UIS:GetMouseLocation(); State.silentAimTracerLine.To=Vector2.new(screenPos.X,screenPos.Y); State.silentAimTracerLine.Visible=true
+                    local dist=(targetPos-camera.CFrame.Position).Magnitude; if dist<50 then State.silentAimTracerLine.Color=Color3.fromRGB(0,255,0) elseif dist<150 then State.silentAimTracerLine.Color=Color3.fromRGB(255,255,0) else State.silentAimTracerLine.Color=Color3.fromRGB(255,50,50) end
+                else State.silentAimTracerLine.Visible=false end else State.silentAimTracerLine.Visible=false end end end) end
+end
+
+-- Hit Sound System
+local HitSound = Instance.new("Sound")
+HitSound.Name = "HitSound"; HitSound.Volume = State.hitSoundVolume; HitSound.SoundId = State.hitSoundID; HitSound.Parent = game:GetService("SoundService")
+local soundPool = {}; local soundIndex = 1
+
+local function getNextSound()
+    if soundIndex > #soundPool then local s = HitSound:Clone(); s.Parent = workspace; s.Looped = false; table.insert(soundPool, s) end
+    local s = soundPool[soundIndex]; soundIndex = soundIndex + 1; if soundIndex > 50 then soundIndex = 1 end; return s
+end
+
+local function playHitSound()
+    if not State.hitSoundEnabled then return end; local s = getNextSound(); s.Volume = State.hitSoundVolume; s.SoundId = State.hitSoundID; s:Stop(); s:Play()
+end
+
+local trackedPlayers = {}
+local function trackPlayerForHitSound(plr)
+    if plr == player then return end; if trackedPlayers[plr] then return end; trackedPlayers[plr] = true
+    plr.CharacterAdded:Connect(function(char)
+        local hum = char:WaitForChild("Humanoid", 10); if not hum then return end; local lastHealth = hum.Health
+        hum.HealthChanged:Connect(function(newHp)
+            if State.silentAimEnabled and State.silentAimTargetPart then local targetChar = State.silentAimTargetPart.Parent
+                if targetChar == char and newHp < lastHealth then playHitSound() end end; lastHealth = newHp end) end)
+end
+for _, plr in ipairs(Players:GetPlayers()) do trackPlayerForHitSound(plr) end
+Players.PlayerAdded:Connect(trackPlayerForHitSound)
+
+-- Visual Prediction
+local function getPredictedPosition(character, predictionTime)
+    local rp = character:FindFirstChild("HumanoidRootPart")
+    if not rp then return nil end
+    local velocity = rp.AssemblyLinearVelocity
+    if velocity.Magnitude < 1 then return rp.Position end
+    return rp.Position + (velocity * predictionTime)
+end
+
+local function updateVisualPrediction()
+    for _, line in pairs(State.visualPredictionLines) do pcall(function() line:Remove() end) end
+    State.visualPredictionLines = {}
+    for _, dot in pairs(State.visualPredictionDots) do pcall(function() dot:Remove() end) end
+    State.visualPredictionDots = {}
+    if not State.visualPredictionEnabled then return end
+    local myChar = char()
+    for _, tp in ipairs(Players:GetPlayers()) do
+        if tp == player then continue end
+        local c = tp.Character; if not c then continue end
+        local rp = c:FindFirstChild("HumanoidRootPart")
+        local hm = c:FindFirstChildOfClass("Humanoid")
+        if not rp or not hm or hm.Health <= 0 then continue end
+        local predictedPos = getPredictedPosition(c, State.visualPredictionLength)
+        if not predictedPos then continue end
+        local sp1, os1 = camera:WorldToViewportPoint(rp.Position)
+        local sp2, os2 = camera:WorldToViewportPoint(predictedPos)
+        if os1 and os2 then
+            local line = Drawing.new("Line")
+            line.From = Vector2.new(sp1.X, sp1.Y); line.To = Vector2.new(sp2.X, sp2.Y)
+            line.Color = State.visualPredictionColor; line.Thickness = State.visualPredictionThickness; line.Visible = true
+            table.insert(State.visualPredictionLines, line)
+            if State.visualPredictionShowDot and (Vector2.new(sp2.X, sp2.Y) - Vector2.new(sp1.X, sp1.Y)).Magnitude > 5 then
+                local dot = Drawing.new("Circle")
+                dot.Position = Vector2.new(sp2.X, sp2.Y); dot.Radius = State.visualPredictionDotSize / 2
+                dot.Color = Color3.fromRGB(255, 100, 0); dot.Filled = true; dot.NumSides = 16; dot.Visible = true
+                table.insert(State.visualPredictionDots, dot)
+            end
+        end
+    end
+end
+
+-- Silent Aim Core
+local _oldNamecall = nil; local _oldIndex = nil
+local npcCache = {}; local lastNpcCacheUpdate = 0; local npcCacheUpdateInterval = 1
+
+local function updateNPCCache()
+    local currentTime = tick(); if currentTime - lastNpcCacheUpdate < npcCacheUpdateInterval then return end; lastNpcCacheUpdate = currentTime
+    local newCache = {}; local lc = char()
+    local function findNPCs(parent)
+        for _, obj in ipairs(parent:GetChildren()) do if obj:IsA("Model") and obj ~= lc then local isPlayerModel = false
+            for _, plr in ipairs(Players:GetPlayers()) do if plr.Character == obj then isPlayerModel = true; break end end
+            if not isPlayerModel then local h = obj:FindFirstChildOfClass("Humanoid")
+                if h and h.Health > 0 then local hrpPart = obj:FindFirstChild("HumanoidRootPart"); if hrpPart then table.insert(newCache, {Model = obj, HRP = hrpPart, Humanoid = h}) end end end end
+            if #obj:GetChildren() > 0 and not obj:IsA("BasePart") and not obj:IsA("Tool") then findNPCs(obj) end end end
+    findNPCs(Workspace); npcCache = newCache
+end
+
+local function getSilentAimTarget()
+    local bc,bp,bd=nil,nil,State.silentAimFOV
+    local sc=State.silentAimFovFollowMouse and UIS:GetMouseLocation() or Vector2.new(camera.ViewportSize.X/2,camera.ViewportSize.Y/2)
+    local lc=char(); if not lc then return nil,nil end
+    if State.silentAimTargetType == "Players" or State.silentAimTargetType == "Both" then
+        for _,p in ipairs(Players:GetPlayers()) do if p==player then continue end; if State.silentAimTeamCheck and playersOnSameTeam(p) then continue end
+            local tc=p.Character; if not tc then continue end; local h=tc:FindFirstChildOfClass("Humanoid"); if not h or h.Health<=0 then continue end
+            local part=tc:FindFirstChild(State.silentAimPart) or tc:FindFirstChild("Head"); if not part then continue end
+            local sp,on=getPositionOnScreen(part.Position); if not on then continue end; local d=(sp-sc).Magnitude; if d>State.silentAimFOV then continue end
+            if State.silentAimVisibleCheck then if #camera:GetPartsObscuringTarget({part.Position,lc,tc},{lc,tc})>0 then continue end end
+            if d<bd then bd=d; bc=tc; bp=part end end end
+    if State.silentAimTargetType == "NPCs" or State.silentAimTargetType == "Both" then updateNPCCache()
+        for _, data in ipairs(npcCache) do local obj = data.Model; if obj and obj.Parent then local h = data.Humanoid; if h and h.Health > 0 then local hrpPart = data.HRP
+            if hrpPart and hrpPart.Parent then local part = obj:FindFirstChild(State.silentAimPart) or obj:FindFirstChild("Head") or hrpPart
+                if part then local sp, on = getPositionOnScreen(part.Position); if on then local d = (sp - sc).Magnitude; if d < State.silentAimFOV and d < bd then
+                    if State.silentAimVisibleCheck then if #camera:GetPartsObscuringTarget({part.Position, lc, obj}, {lc, obj}) == 0 then bd = d; bc = obj; bp = part end
+                    else bd = d; bc = obj; bp = part end end end end end end end end end
+    return bc,bp
+end
+
+local function shouldSilentHit() return State.silentAimHitChance>=100 or math.random(1,100)<=State.silentAimHitChance end
+local function getPredictedPos(part)
+    local pos=part.Position; local vel=part.AssemblyLinearVelocity; if vel.Magnitude>0.5 and State.silentAimPrediction>0 then pos=pos+(vel*State.silentAimPrediction*1.5) end; return pos
+end
+
+local function setupSilentAimHooks()
+    if State.silentAimNamecallHooked then return end
+    _oldNamecall=hookmetamethod(game,"__namecall",function(self,...)
+        local method=getnamecallmethod(); local args={...}
+        if State.silentAimEnabled and State.silentAimTargetPart and State.silentAimTargetPart.Parent then local tp=State.silentAimTargetPart
+            if method=="Raycast" and self==workspace and shouldSilentHit() then local o=args[1]; local d=args[2]
+                if typeof(o)=="Vector3" and typeof(d)=="Vector3" then local tpos=getPredictedPos(tp)
+                    if State.silentAimBulletTeleport then local dir=(tpos-o).Unit; return _oldNamecall(self,tpos-(dir*2),dir*5,args[3],args[4])
+                    else return _oldNamecall(self,o,(tpos-o).Unit*d.Magnitude,args[3],args[4]) end end end
+            if method=="FindPartOnRay" and self==workspace and shouldSilentHit() then local ray=args[1]
+                if typeof(ray)=="Ray" then local tpos=getPredictedPos(tp)
+                    if State.silentAimBulletTeleport then local dir=(tpos-ray.Origin).Unit; return _oldNamecall(self,Ray.new(tpos-(dir*2),dir*5),args[2],args[3],args[4])
+                    else return _oldNamecall(self,Ray.new(ray.Origin,(tpos-ray.Origin).Unit*(tpos-ray.Origin).Magnitude),args[2],args[3],args[4]) end end end
+            if (method=="FireServer" or method=="InvokeServer") and shouldSilentHit() then local sn=""; pcall(function() sn=self.Name:lower() end)
+                if sn:find("hit") or sn:find("attack") or sn:find("damage") or sn:find("fire") or sn:find("shoot") or sn:find("click") or sn:find("bullet") or sn:find("weapon") or sn:find("gun") or sn:find("swing") or sn:find("slash") or sn:find("remoteevent") or sn:find("knife") or sn:find("tool") or sn:find("melee") then
+                    local tpos=getPredictedPos(tp); local na={}; local mod=false
+                    for i,arg in ipairs(args) do if typeof(arg)=="Instance" and arg:IsA("BasePart") then na[i]=tp; mod=true
+                        elseif typeof(arg)=="Vector3" then na[i]=tpos; mod=true
+                        elseif typeof(arg)=="CFrame" then na[i]=CFrame.new(tpos); mod=true
+                        elseif typeof(arg)=="Ray" and typeof(arg.Origin)=="Vector3" then if State.silentAimBulletTeleport then local dir=(tpos-arg.Origin).Unit; na[i]=Ray.new(tpos-(dir*2),dir*5) else na[i]=Ray.new(arg.Origin,(tpos-arg.Origin).Unit*(tpos-arg.Origin).Magnitude) end; mod=true
+                        else na[i]=arg end end
+                    if mod then return _oldNamecall(self,unpack(na)) end end end end
+        return _oldNamecall(self,...) end)
+    State.silentAimNamecallHooked=true
+end
+
+local function setupSilentAimMouseHook()
+    if State.silentAimIndexHooked then return end
+    _oldIndex=hookmetamethod(game,"__index",function(self,key)
+        if self==mouse and State.silentAimEnabled and State.silentAimTargetPart and State.silentAimTargetPart.Parent then
+            local kl=typeof(key)=="string" and key:lower() or ""; if kl=="hit" then return CFrame.new(State.silentAimTargetPart.Position) elseif kl=="target" then return State.silentAimTargetPart end end
+        return _oldIndex(self,key) end)
+    State.silentAimIndexHooked=true
+end
+
+local function toggleSilentAim(enabled)
+    State.silentAimEnabled=enabled
+    if enabled then setupSilentAimHooks(); setupSilentAimMouseHook(); updateSilentAimVisuals()
+        task.spawn(function() while State.silentAimEnabled do local c,p=getSilentAimTarget(); State.silentAimTargetChar=c; State.silentAimTargetPart=p; task.wait(State.silentAimUpdateInterval) end
+            State.silentAimTargetChar=nil; State.silentAimTargetPart=nil; if State.silentAimFovCircle then State.silentAimFovCircle:Remove(); State.silentAimFovCircle=nil end
+            if State.silentAimTracerLine then State.silentAimTracerLine:Remove(); State.silentAimTracerLine=nil end
+            if State.silentAimFovConnection then State.silentAimFovConnection:Disconnect(); State.silentAimFovConnection=nil end end)
+        Notification.new({Title = "子弹追踪", Content = "已开启", Duration = 2})
+    else State.silentAimTargetChar=nil; State.silentAimTargetPart=nil; if State.silentAimFovCircle then State.silentAimFovCircle:Remove(); State.silentAimFovCircle=nil end
+        if State.silentAimTracerLine then State.silentAimTracerLine:Remove(); State.silentAimTracerLine=nil end
+        if State.silentAimFovConnection then State.silentAimFovConnection:Disconnect(); State.silentAimFovConnection=nil end
+        Notification.new({Title = "子弹追踪", Content = "已关闭", Duration = 2}) end
+end
+
+-- Safe Teleport
+local function saveCurrentPosition(name)
+    if not name or name=="" then name="位置 "..(#State.savedPositions+1) end; local r=hrp(); if not r then return end
+    table.insert(State.savedPositions,{name=name,position=r.Position,timestamp=os.date("%H:%M:%S"),placeId=game.PlaceId}) end
+local function teleportToPosition(pd)
+    if not pd or not pd.position then return end; if pd.placeId and pd.placeId~=game.PlaceId then return end
+    local r=hrp(); if not r then return end; pcall(function() r.CFrame=CFrame.new(pd.position+Vector3.new(0,5,0)) end) end
+local function clearAllSavedPositions() State.savedPositions={} end
+local function toggleAutoSafeTeleport(enabled)
+    State.autoSafeTeleportEnabled=enabled; if State.safeTeleportConnection then State.safeTeleportConnection:Disconnect(); State.safeTeleportConnection=nil end
+    if enabled and #State.savedPositions>0 then State.safeTeleportConnection=RunService.Heartbeat:Connect(function()
+        local h=hum(); if not h then return end; if h.Health>0 and h.Health<=State.autoSafeTeleportHealthThreshold then
+            if tick()-State.lastAutoSafeTeleportTime>=State.autoSafeTeleportCooldown then local r=hrp(); if r and #State.savedPositions>0 then
+                local pos=State.savedPositions[math.random(1,#State.savedPositions)]; pcall(function() r.CFrame=CFrame.new(pos.position+Vector3.new(0,5,0)) end); State.lastAutoSafeTeleportTime=tick() end end end end) end end
+local function quickSave() saveCurrentPosition("快速 "..os.date("%m/%d %H:%M")) end
+local function quickTeleport() if #State.savedPositions>0 then teleportToPosition(State.savedPositions[#State.savedPositions]) end end
+
+-- ESP
+local function createESPForPlayer(tp)
+    if tp==player then return end; if State.espDrawings[tp] then removeESPForPlayer(tp) end; local d={}
+    if State.espSettings.BoxEnabled then d.Box={}; for _,n in ipairs({"Top","Bottom","Left","Right"}) do d.Box[n]=Drawing.new("Line"); d.Box[n].Visible=false; d.Box[n].Thickness=State.espSettings.BoxThickness end end
+    if State.espSettings.TracerEnabled then d.Tracer=Drawing.new("Line"); d.Tracer.Visible=false; d.Tracer.Thickness=State.espSettings.TracerThickness end
+    if State.espSettings.HealthEnabled then d.HealthBar={Background=Drawing.new("Square"),Fill=Drawing.new("Square")}; d.HealthBar.Background.Filled=true; d.HealthBar.Background.Color=Color3.fromRGB(30,30,30); d.HealthBar.Fill.Filled=true end
+    if State.espSettings.NameEnabled then d.Name=Drawing.new("Text"); d.Name.Size=State.espSettings.NameSize; d.Name.Center=true; d.Name.Outline=true; d.Name.Font=2 end
+    if State.espSettings.ShowDistance then d.Distance=Drawing.new("Text"); d.Distance.Size=13; d.Distance.Center=true; d.Distance.Outline=true; d.Distance.Font=2 end
+    if State.espSettings.HeadDotEnabled then d.HeadDot=Drawing.new("Circle"); d.HeadDot.Radius=State.espSettings.HeadDotSize/2; d.HeadDot.Filled=State.espSettings.HeadDotFilled; d.HeadDot.NumSides=32 end
+    State.espDrawings[tp]=d
+end
+local function removeESPForPlayer(tp)
+    local d=State.espDrawings[tp]; if d then for cat,items in pairs(d) do if cat=="Box" or cat=="HealthBar" then for _,o in pairs(items) do pcall(function() o:Remove() end) end else pcall(function() items:Remove() end) end end; State.espDrawings[tp]=nil end end
+local function hideESPElements(d) if not d then return end; for cat,items in pairs(d) do if cat=="Box" or cat=="HealthBar" then for _,o in pairs(items) do o.Visible=false end else items.Visible=false end end end
+local function getESPColor(tp) if State.espSettings.TeamCheck then local ok,same=pcall(function() return tp.Team==player.Team end); if ok and same then return State.espColors.Ally end end; return State.espColors.Enemy end
+local function worldToScreen(wp) local sp,os_=camera:WorldToViewportPoint(wp); return Vector2.new(sp.X,sp.Y),os_ end
+local function getTracerOrigin()
+    local vp=camera.ViewportSize; local o=State.espSettings.TracerOrigin
+    if o=="Bottom" then return Vector2.new(vp.X/2,vp.Y) elseif o=="Top" then return Vector2.new(vp.X/2,0) elseif o=="Middle" then return Vector2.new(vp.X/2,vp.Y/2) elseif o=="Mouse" then return UIS:GetMouseLocation() end
+    return Vector2.new(vp.X/2,vp.Y) end
+local function updateESPForPlayer(tp)
+    local d=State.espDrawings[tp]; if not d then return end; local c=tp.Character; if not c then hideESPElements(d); return end
+    local rp=c:FindFirstChild("HumanoidRootPart"); local head=c:FindFirstChild("Head"); local hm=c:FindFirstChildOfClass("Humanoid")
+    if not rp or not head or not hm or hm.Health<=0 then hideESPElements(d); return end
+    local dist=(rp.Position-camera.CFrame.Position).Magnitude; if dist>State.espSettings.MaxDistance then hideESPElements(d); return end
+    local hs,ho=worldToScreen(head.Position+Vector3.new(0,0.5,0)); if not ho then hideESPElements(d); return end
+    local color=getESPColor(tp); local ext=c:GetExtentsSize(); local ts,_=worldToScreen(head.Position+Vector3.new(0,1.5,0)); local bs,_=worldToScreen(rp.Position-Vector3.new(0,ext.Y/2,0))
+    local bh=math.abs(bs.Y-ts.Y); local bw=bh*0.5; local bx=hs.X-bw/2; local by=math.min(ts.Y,bs.Y)
+    if d.Box then d.Box.Top.From=Vector2.new(bx,by); d.Box.Top.To=Vector2.new(bx+bw,by); d.Box.Top.Visible=true; d.Box.Top.Color=color
+        d.Box.Bottom.From=Vector2.new(bx,by+bh); d.Box.Bottom.To=Vector2.new(bx+bw,by+bh); d.Box.Bottom.Visible=true; d.Box.Bottom.Color=color
+        d.Box.Left.From=Vector2.new(bx,by); d.Box.Left.To=Vector2.new(bx,by+bh); d.Box.Left.Visible=true; d.Box.Left.Color=color
+        d.Box.Right.From=Vector2.new(bx+bw,by); d.Box.Right.To=Vector2.new(bx+bw,by+bh); d.Box.Right.Visible=true; d.Box.Right.Color=color end
+    if d.Tracer then d.Tracer.From=getTracerOrigin(); d.Tracer.To=Vector2.new(bx+bw/2,by+bh); d.Tracer.Visible=true; d.Tracer.Color=color end
+    if d.HealthBar then local hp=math.clamp(hm.Health/hm.MaxHealth,0,1); local bw2,bh2=3,bh; local bx2,by2=bx-bw2-3,by
+        d.HealthBar.Background.Size=Vector2.new(bw2+2,bh2+2); d.HealthBar.Background.Position=Vector2.new(bx2-1,by2-1); d.HealthBar.Background.Visible=true
+        local fh=bh2*hp; d.HealthBar.Fill.Size=Vector2.new(bw2,fh); d.HealthBar.Fill.Position=Vector2.new(bx2,by2+bh2-fh); d.HealthBar.Fill.Visible=true
+        if hp>0.6 then d.HealthBar.Fill.Color=State.espColors.HealthHigh elseif hp>0.3 then d.HealthBar.Fill.Color=State.espColors.HealthMedium else d.HealthBar.Fill.Color=State.espColors.HealthLow end end
+    if d.Name then d.Name.Text=State.espSettings.NameMode=="DisplayName" and tp.DisplayName or tp.Name; d.Name.Position=Vector2.new(bx+bw/2,by-20); d.Name.Visible=true; d.Name.Color=color end
+    if d.Distance then local dt=State.espSettings.DistanceUnit=="m" and string.format("%.0fm",dist/3.571) or math.floor(dist).."s"; d.Distance.Text="["..dt.."]"; d.Distance.Position=Vector2.new(bx+bw/2,by+bh+4); d.Distance.Visible=true; d.Distance.Color=color end
+    if d.HeadDot then d.HeadDot.Position=hs; d.HeadDot.Visible=ho; d.HeadDot.Color=color end
+end
+local function startESPLoop()
+    if State.espConnection then State.espConnection:Disconnect() end
+    State.espConnection=RunService.RenderStepped:Connect(function()
+        if State.espEnabled then for _,tp in ipairs(Players:GetPlayers()) do if tp~=player then if not State.espDrawings[tp] then createESPForPlayer(tp) end; updateESPForPlayer(tp) end end end
+        updateVisualPrediction() end) end
+local function stopESP()
+    if State.espConnection then State.espConnection:Disconnect(); State.espConnection=nil end; for tp,_ in pairs(State.espDrawings) do removeESPForPlayer(tp) end; State.espDrawings={}; State.espHighlights={} end
+local function recreateAllESP() if not State.espEnabled then return end; for tp,_ in pairs(State.espDrawings) do removeESPForPlayer(tp) end; for _,p in ipairs(Players:GetPlayers()) do if p~=player then createESPForPlayer(p) end end end
+Players.PlayerAdded:Connect(function(p) if p~=player and State.espEnabled then createESPForPlayer(p) end end)
+Players.PlayerRemoving:Connect(function(p) removeESPForPlayer(p) end)
+
+-- NPC ESP
+local function isNPC(char)
+    if not char or not char:FindFirstChildOfClass("Humanoid") then return false end
+    local p = Players:GetPlayerFromCharacter(char)
+    return p == nil
+end
+local function createNPCESPForChar(char)
+    if State.npcEspDrawings[char] then removeNPCESPForChar(char) end
+    local d = {}
+    if State.npcEspSettings.BoxEnabled then d.Box={}; for _,n in ipairs({"Top","Bottom","Left","Right"}) do d.Box[n]=Drawing.new("Line"); d.Box[n].Visible=false; d.Box[n].Thickness=2 end end
+    if State.npcEspSettings.TracerEnabled then d.Tracer=Drawing.new("Line"); d.Tracer.Visible=false; d.Tracer.Thickness=1 end
+    if State.npcEspSettings.HealthEnabled then d.HealthBar={Background=Drawing.new("Square"),Fill=Drawing.new("Square")}; d.HealthBar.Background.Filled=true; d.HealthBar.Background.Color=Color3.fromRGB(30,30,30); d.HealthBar.Fill.Filled=true end
+    if State.npcEspSettings.NameEnabled then d.Name=Drawing.new("Text"); d.Name.Size=14; d.Name.Center=true; d.Name.Outline=true; d.Name.Font=2 end
+    if State.npcEspSettings.ShowDistance then d.Distance=Drawing.new("Text"); d.Distance.Size=13; d.Distance.Center=true; d.Distance.Outline=true; d.Distance.Font=2 end
+    if State.npcEspSettings.HeadDotEnabled then d.HeadDot=Drawing.new("Circle"); d.HeadDot.Radius=4; d.HeadDot.Filled=true; d.HeadDot.NumSides=32 end
+    State.npcEspDrawings[char]=d
+end
+local function removeNPCESPForChar(char)
+    local d=State.npcEspDrawings[char]; if d then for cat,items in pairs(d) do if cat=="Box" or cat=="HealthBar" then for _,o in pairs(items) do pcall(function() o:Remove() end) end else pcall(function() items:Remove() end) end end; State.npcEspDrawings[char]=nil end end
+local function hideNPCESPElements(d) if not d then return end; for cat,items in pairs(d) do if cat=="Box" or cat=="HealthBar" then for _,o in pairs(items) do o.Visible=false end else items.Visible=false end end end
+local function updateNPCESPForChar(char)
+    local d=State.npcEspDrawings[char]; if not d then return end
+    if not char.Parent then hideNPCESPElements(d); return end
+    local rp=char:FindFirstChild("HumanoidRootPart"); local head=char:FindFirstChild("Head"); local hm=char:FindFirstChildOfClass("Humanoid")
+    if not rp or not head or not hm or hm.Health<=0 then hideNPCESPElements(d); return end
+    local dist=(rp.Position-camera.CFrame.Position).Magnitude; if dist>State.npcEspMaxDistance then hideNPCESPElements(d); return end
+    local hs,ho=worldToScreen(head.Position+Vector3.new(0,0.5,0)); if not ho then hideNPCESPElements(d); return end
+    local color=State.npcEspColor; local ext=char:GetExtentsSize(); local ts,_=worldToScreen(head.Position+Vector3.new(0,1.5,0)); local bs,_=worldToScreen(rp.Position-Vector3.new(0,ext.Y/2,0))
+    local bh=math.abs(bs.Y-ts.Y); local bw=bh*0.5; local bx=hs.X-bw/2; local by=math.min(ts.Y,bs.Y)
+    if d.Box then d.Box.Top.From=Vector2.new(bx,by); d.Box.Top.To=Vector2.new(bx+bw,by); d.Box.Top.Visible=true; d.Box.Top.Color=color
+        d.Box.Bottom.From=Vector2.new(bx,by+bh); d.Box.Bottom.To=Vector2.new(bx+bw,by+bh); d.Box.Bottom.Visible=true; d.Box.Bottom.Color=color
+        d.Box.Left.From=Vector2.new(bx,by); d.Box.Left.To=Vector2.new(bx,by+bh); d.Box.Left.Visible=true; d.Box.Left.Color=color
+        d.Box.Right.From=Vector2.new(bx+bw,by); d.Box.Right.To=Vector2.new(bx+bw,by+bh); d.Box.Right.Visible=true; d.Box.Right.Color=color end
+    if d.Tracer then d.Tracer.From=getTracerOrigin(); d.Tracer.To=Vector2.new(bx+bw/2,by+bh); d.Tracer.Visible=true; d.Tracer.Color=color end
+    if d.HealthBar then local hp=math.clamp(hm.Health/hm.MaxHealth,0,1); local bw2,bh2=3,bh; local bx2,by2=bx-bw2-3,by
+        d.HealthBar.Background.Size=Vector2.new(bw2+2,bh2+2); d.HealthBar.Background.Position=Vector2.new(bx2-1,by2-1); d.HealthBar.Background.Visible=true
+        local fh=bh2*hp; d.HealthBar.Fill.Size=Vector2.new(bw2,fh); d.HealthBar.Fill.Position=Vector2.new(bx2,by2+bh2-fh); d.HealthBar.Fill.Visible=true
+        if hp>0.6 then d.HealthBar.Fill.Color=State.espColors.HealthHigh elseif hp>0.3 then d.HealthBar.Fill.Color=State.espColors.HealthMedium else d.HealthBar.Fill.Color=State.espColors.HealthLow end end
+    if d.Name then local nm=char.Name; d.Name.Text=nm; d.Name.Position=Vector2.new(bx+bw/2,by-20); d.Name.Visible=true; d.Name.Color=color end
+    if d.Distance then local dt=string.format("%.0fm",dist/3.571); d.Distance.Text="["..dt.."]"; d.Distance.Position=Vector2.new(bx+bw/2,by+bh+4); d.Distance.Visible=true; d.Distance.Color=color end
+    if d.HeadDot then d.HeadDot.Position=hs; d.HeadDot.Visible=ho; d.HeadDot.Color=color end
+end
+local function startNPCESPLoop()
+    if State.npcEspConnection then State.npcEspConnection:Disconnect() end
+    State.npcEspConnection=RunService.RenderStepped:Connect(function()
+        if State.npcEspEnabled then
+            for _,char in ipairs(Workspace:GetChildren()) do
+                if isNPC(char) then
+                    if not State.npcEspDrawings[char] then createNPCESPForChar(char) end
+                    updateNPCESPForChar(char)
+                end
+            end
+        end
+    end)
+end
+local function stopNPCESP()
+    if State.npcEspConnection then State.npcEspConnection:Disconnect(); State.npcEspConnection=nil end
+    for char,_ in pairs(State.npcEspDrawings) do removeNPCESPForChar(char) end
+    State.npcEspDrawings={}
+end
+Workspace.ChildAdded:Connect(function(child)
+    if State.npcEspEnabled and isNPC(child) then createNPCESPForChar(child) end
+end)
+Workspace.ChildRemoved:Connect(function(child)
+    removeNPCESPForChar(child)
+end)
+
+-- Rejoin/Suicide/Speed
+local function rejoinServer() local to=Instance.new("TeleportOptions"); to.ShouldReserveServer=false; TeleportService:Teleport(game.PlaceId,player,to) end
+local function suicide() local h=hum(); if h then h.Health=0 end end
+local speedActive=false
+local function toggleSpeed(enabled)
+    speedActive=enabled; if enabled then if State.runConnection then State.runConnection:Disconnect() end; local lt=tick()
+        State.runConnection=RunService.Heartbeat:Connect(function() local c=char(); if not c then return end; local h=hum(); if not h or h.Health<=0 then return end
+            local md=h.MoveDirection; if md.Magnitude>0 then local ct=tick(); c:TranslateBy(md*State.runSpeed*(ct-lt)); lt=ct else lt=tick() end end)
+    elseif State.runConnection then State.runConnection:Disconnect(); State.runConnection=nil end end
+
+-- Destroy UI
+local function destroyUI()
+    if State.silentAimEnabled then toggleSilentAim(false) end
+    if State.isInvisibilityEnabled then stopInvisibility() end
+if State.invisibilityHighlight then State.invisibilityHighlight:Destroy() end
+    if State.forceLookEnabled then toggleForceLook(false) end
+    if State.nightVisionEnabled then toggleNightVision(false) end
+    if State.isAutoAttackEnabled then toggleAutoAttack(false) end
+    if State.vehicleBoostEnabled then toggleVehicleBoost(false) end; if State.vehicleJumpEnabled then toggleVehicleAutoJump(false) end
+    if State.isAutoPickupEnabled then toggleAutoPickup(false) end; if State.espEnabled then stopESP() end
+    if State.npcEspEnabled then stopNPCESP() end
+    if State.silentAimFovCircle then State.silentAimFovCircle:Remove() end; if State.silentAimTracerLine then State.silentAimTracerLine:Remove() end
+    if State.silentAimFovConnection then State.silentAimFovConnection:Disconnect() end
+    if State.isNoClipEnabled then restoreAllWalls() end; if State.noClipConnection then State.noClipConnection:Disconnect() end
+    if State.isFastInteract then setFastInteract(false) end; if State.runConnection then State.runConnection:Disconnect() end
+    if State.spinConnection then State.spinConnection:Disconnect() end; if State.flyConnection then State.flyConnection:Disconnect() end
+    if State.autoAttackConnection then State.autoAttackConnection:Disconnect() end; if State.killAuraConnection then State.killAuraConnection:Disconnect() end
+    if State.attackRangeIndicator then State.attackRangeIndicator:Destroy() end; if State.attackRangeConnection then State.attackRangeConnection:Disconnect() end
+    if State.aimFovIndicator then State.aimFovIndicator:Remove() end; if State.aimFovConnection then State.aimFovConnection:Disconnect() end
+    if State.fovConnection then State.fovConnection:Disconnect() end; if State.customFOVEnabled and State.originalFOV then camera.FieldOfView=State.originalFOV end
+    if State.nightVisionConnection then State.nightVisionConnection:Disconnect() end; if State.timeLockConnection then State.timeLockConnection:Disconnect() end
+    if State.safeTeleportConnection then State.safeTeleportConnection:Disconnect() end; if State.interactConnection then State.interactConnection:Disconnect() end
+    if State.autoInteractConnection then State.autoInteractConnection:Disconnect() end; if State.autoPickupConnection then State.autoPickupConnection:Disconnect() end
+    if State.promptTriggeredConnection then State.promptTriggeredConnection:Disconnect() end; if State.promptButtonHoldBeganConnection then State.promptButtonHoldBeganConnection:Disconnect() end
+    if State.leftClickDeleteConnection then State.leftClickDeleteConnection:Disconnect() end
+    for _, line in pairs(State.visualPredictionLines) do pcall(function() line:Remove() end) end
+    for _, dot in pairs(State.visualPredictionDots) do pcall(function() dot:Remove() end) end
+    State.visualPredictionLines={}; State.visualPredictionDots={}
+    if HitSound then HitSound:Destroy() end; soundPool={}; trackedPlayers={}; npcCache={}
+    if State.hitboxEnabled then resetAllHitboxes() end; State.hitboxOriginalProps={}
+    if State.hitboxRangeConnection then State.hitboxRangeConnection:Disconnect() end
+    for _, circles in pairs(State.hitboxRangeCircles) do for _, c in pairs(circles) do pcall(function() c:Remove() end) end end
+    State.hitboxRangeCircles = {}
+    if State.npcCollisionDisabled then toggleNpcCollision(false) end
+    if State.aimMouseConnection then State.aimMouseConnection:Disconnect() end
+    if State.aimMouseFovCircle then State.aimMouseFovCircle:Remove() end
+    releaseAimAutoFire()
+    NeverLose.ScreenGui:Destroy()
+end
+
+-- Aim Lock
+RunService.RenderStepped:Connect(function()
+    local st=getgenv().ScriptState; if st.lockEnabled and not st.isLockedOn then acquireLockTarget() end
+    if st.lockEnabled and st.isLockedOn and st.targetPlayer and st.targetPlayer.Character then
+        if st.aimLockTeamCheck and st.targetPlayer:IsA("Player") and st.targetPlayer.Team==player.Team then st.isLockedOn=false; st.targetPlayer=nil; return end
+        if st.aimLockVisibleCheck and not IsPlayerVisible(st.targetPlayer) then st.isLockedOn=false; st.targetPlayer=nil; return end
+        local tc=st.targetPlayer:IsA("Player") and st.targetPlayer.Character or st.targetPlayer; local part=tc:FindFirstChild(st.bodyPartSelected or "Head"); local hm=tc:FindFirstChildOfClass("Humanoid")
+        if part and hm and hm.Health>0 then local tp=part.Position
+            if State.aimAutoPredict then local vel=part.AssemblyLinearVelocity; if vel.Magnitude>1 then tp=tp+(vel*State.aimPredictionAmount) end else tp=tp+(part.AssemblyLinearVelocity*st.predictionFactor) end
+            local cp=camera.CFrame.Position; local dlv=(tp-cp).Unit
+            if State.aimSmoothEnabled then camera.CFrame=camera.CFrame:Lerp(CFrame.lookAt(cp,cp+dlv),math.clamp(State.aimSmoothSpeed*0.01,0.01,1))
+            else if State.aimAntiShakeEnabled then local clv=camera.CFrame.LookVector; local cv=dlv-clv; if cv.Magnitude>0.15 then dlv=clv+cv.Unit*0.15 end end; camera.CFrame=CFrame.lookAt(cp,cp+dlv) end
+            State.aimLastTargetTime=tick() else st.isLockedOn=false; st.targetPlayer=nil end end
+    if st.lockEnabled and st.isLockedOn and State.aimTargetSwitchEnabled and tick()-State.aimLastTargetTime>0.5 then local _,nt=getClosestPlayer({targetPart=st.bodyPartSelected,visibleCheck=st.aimLockVisibleCheck,aliveCheck=st.aimLockAliveCheck,teamCheck=st.aimLockTeamCheck})
+        if nt and nt~=st.targetPlayer then st.isLockedOn=false; st.targetPlayer=nil; acquireLockTarget() end end end)
+
+-- =========================================================================
+--  TABS
+-- =========================================================================
+GUI:AddTabLabel('角色')
+
+local MoveTab = GUI:AddTab({Icon = 'person-running', Name = '移动'})
+local MoveSpeed = MoveTab:AddSection({Name = '速度'})
+MoveSpeed:AddLabel('跑步速度'):AddSlider({Min = 10, Max = 500, Default = 20, Type = 'spd', Flag = 'mv_speed', Callback = function(v) State.runSpeed = v end})
+MoveSpeed:AddLabel('快速跑步'):AddToggle({Default = false, Flag = 'mv_fast', Callback = toggleSpeed})
+MoveSpeed:AddLabel('快捷键(Z)'):AddToggle({Default = false, Flag = 'mv_key', Callback = function(v) State.isRunKeyEnabled = v end})
+local MoveSpin = MoveTab:AddSection({Name = '旋转'})
+MoveSpin:AddLabel('人物旋转'):AddToggle({Default = false, Flag = 'mv_spin', Callback = toggleSpin})
+MoveSpin:AddLabel('旋转速度'):AddSlider({Min = 1, Max = 50, Default = 10, Type = 'deg', Flag = 'mv_spin_spd', Callback = function(v) State.spinSpeed = v end})
+local MoveAtk = MoveTab:AddSection({Name = '攻击'})
+MoveAtk:AddLabel('自动攻击'):AddToggle({Default = false, Flag = 'mv_atk', Callback = toggleAutoAttack})
+MoveAtk:AddLabel('攻击范围'):AddSlider({Min = 5, Max = 100, Default = 20, Type = 'studs', Flag = 'mv_atk_range', Callback = function(v) State.autoAttackRange = v end})
+MoveAtk:AddLabel('显示范围'):AddToggle({Default = false, Flag = 'mv_show_range', Callback = toggleAttackRangeVisible})
+MoveAtk:AddLabel('瞬移模式'):AddDropdown({Default = '旋转', Values = {'旋转', '身后', '脚下', '头上'}, Flag = 'mv_tp_mode', Callback = function(v) if v == '身后' then State.teleportMode = 'behind' elseif v == '脚下' then State.teleportMode = 'feet' elseif v == '头上' then State.teleportMode = 'head' else State.teleportMode = 'rotate' end end})
+MoveAtk:AddLabel('锁定玩家'):AddDropdown({Default = '无', Values = getPlayerList(), Flag = 'mv_atk_lock', Callback = function(v) if v == '无' then State.autoAttackLockPlayer = nil else State.autoAttackLockPlayer = v end end})
+local MoveFly = MoveTab:AddSection({Name = '飞行'})
+MoveFly:AddLabel('人物飞行'):AddToggle({Default = false, Flag = 'mv_fly', Callback = toggleFly})
+MoveFly:AddLabel('飞行速度'):AddSlider({Min = 10, Max = 200, Default = 50, Type = 'spd', Flag = 'mv_fly_spd', Callback = function(v) State.flySpeed = v end})
+do local b; b = MoveFly:AddLabel('传送到天空'):AddToggle({Default = false, Flag = 'btn_sky', Callback = function(v) if v then teleportToSky(); b:SetValue(false) end end}) end
+local MoveVeh = MoveTab:AddSection({Name = '载具'})
+MoveVeh:AddLabel('车辆加速'):AddToggle({Default = false, Flag = 'mv_veh_boost', Callback = toggleVehicleBoost})
+MoveVeh:AddLabel('加速倍数'):AddSlider({Min = 1, Max = 10, Default = 2, Type = 'x', Flag = 'mv_veh_mult', Callback = function(v) State.vehicleBoostMultiplier = v end})
+MoveVeh:AddLabel('车辆自动跳跃'):AddToggle({Default = false, Flag = 'mv_veh_jump', Callback = toggleVehicleAutoJump})
+MoveVeh:AddLabel('跳跃力度'):AddSlider({Min = 10, Max = 200, Default = 50, Flag = 'mv_jump_pwr', Callback = function(v) State.vehicleJumpPower = v end})
+do local b; b = MoveVeh:AddLabel('车辆跳跃'):AddToggle({Default = false, Flag = 'btn_veh_jump', Callback = function(v) if v then vehicleJump(); b:SetValue(false) end end}) end
+local MoveView = MoveTab:AddSection({Name = '视角'})
+MoveView:AddLabel('强制望向最近玩家'):AddToggle({Default = false, Flag = 'mv_force_look', Callback = toggleForceLook})
+local MoveInvis = MoveTab:AddSection({Name = '隐身'})
+MoveInvis:AddLabel('隐身模式'):AddToggle({Default = false, Flag = 'mv_invis', Callback = toggleInvisibility})
+MoveInvis:AddLabel('地下深度'):AddSlider({Min = -30, Max = -5, Default = -15, Type = 'studs', Flag = 'mv_invis_depth', Callback = function(v) State.invisibilityUndergroundOffset = v end})
+
+local InteractTab = GUI:AddTab({Icon = 'hand-pointer', Name = '互动'})
+local IntFast = InteractTab:AddSection({Name = '快速互动'})
+do local b; b = IntFast:AddLabel('开启'):AddToggle({Default = false, Flag = 'btn_fast_on', Callback = function(v) if v then setFastInteract(true); b:SetValue(false) end end}) end
+do local b; b = IntFast:AddLabel('关闭'):AddToggle({Default = false, Flag = 'btn_fast_off', Callback = function(v) if v then setFastInteract(false); b:SetValue(false) end end}) end
+IntFast:AddLabel('互动距离'):AddSlider({Min = 10, Max = 5000, Default = 100, Flag = 'int_dist', Callback = function(v) State.interactDistance = v end})
+local IntAuto = InteractTab:AddSection({Name = '自动互动'})
+IntAuto:AddLabel('自动互动'):AddToggle({Default = false, Flag = 'int_auto', Callback = toggleAutoInteract})
+IntAuto:AddLabel('范围'):AddSlider({Min = 5, Max = 50, Default = 10, Flag = 'int_auto_rng', Callback = function(v) State.autoInteractRange = v end})
+IntAuto:AddLabel('延迟'):AddSlider({Min = 0.1, Max = 5, Default = 0.5, Rounding = 1, Flag = 'int_auto_dly', Callback = function(v) State.autoInteractDelay = v end})
+local IntPick = InteractTab:AddSection({Name = '拾取物品'})
+IntPick:AddLabel('自动拾取'):AddToggle({Default = false, Flag = 'int_pickup', Callback = toggleAutoPickup})
+IntPick:AddLabel('拾取范围'):AddSlider({Min = 5, Max = 100, Default = 50, Type = 'studs', Flag = 'int_pickup_rng', Callback = function(v) State.autoPickupRange = v end})
+do local b; b = IntPick:AddLabel('一键拾取全部'):AddToggle({Default = false, Flag = 'btn_pickall', Callback = function(v) if v then pickupAllInRange(); b:SetValue(false) end end}) end
+local IntTool = InteractTab:AddSection({Name = '工具管理'})
+do local b; b = IntTool:AddLabel('装备背包所有工具'):AddToggle({Default = false, Flag = 'btn_equip', Callback = function(v) if v then equipAllTools(); b:SetValue(false) end end}) end
+do local b; b = IntTool:AddLabel('卸下所有工具'):AddToggle({Default = false, Flag = 'btn_unequip', Callback = function(v) if v then unequipAllTools(); b:SetValue(false) end end}) end
+do local b; b = IntTool:AddLabel('列出背包工具'):AddToggle({Default = false, Flag = 'btn_list', Callback = function(v) if v then listBackpackTools(); b:SetValue(false) end end}) end
+do local b; b = InteractTab:AddSection({Name = '其他'}):AddLabel('还原互动距离'):AddToggle({Default = false, Flag = 'btn_restore', Callback = function(v) if v then pcall(function() for _, p in ipairs(game:GetDescendants()) do if p and p.Parent and p:IsA('ProximityPrompt') then pcall(function() local d = p:GetAttribute('oMD'); if d then p.MaxActivationDistance = d; p:SetAttribute('oMD', nil) end end) end end end); b:SetValue(false) end end}) end
+
+local CollisionTab = GUI:AddTab({Icon = 'box', Name = '碰撞'})
+local ColClip = CollisionTab:AddSection({Name = '智能穿墙'})
+ColClip:AddLabel('智能穿墙'):AddToggle({Default = false, Flag = 'col_noclip', Callback = toggleNoClip})
+ColClip:AddLabel('射线数量'):AddSlider({Min = 4, Max = 36, Default = 16, Rounding = 0, Flag = 'col_rays', Callback = function(v) State.wallPhaseSettings.rayCount = math.clamp(v, 4, 36) end})
+ColClip:AddLabel('射线长度'):AddSlider({Min = 5, Max = 30, Default = 15, Flag = 'col_ray_len', Callback = function(v) State.wallPhaseSettings.rayLength = math.clamp(v, 5, 30) end})
+do local b; b = ColClip:AddLabel('恢复墙壁'):AddToggle({Default = false, Flag = 'btn_walls', Callback = function(v) if v then restoreAllWalls(); b:SetValue(false) end end}) end
+local ColBox = CollisionTab:AddSection({Name = '碰撞箱'})
+ColBox:AddLabel('玩家碰撞箱'):AddToggle({Default = true, Flag = 'col_pbox', Callback = function(v)
+    State.hitboxShowPlayerBox = v; refreshHitboxVisibility()
+end})
+ColBox:AddLabel('NPC碰撞箱'):AddToggle({Default = true, Flag = 'col_nbox', Callback = function(v)
+    State.hitboxShowNPCBox = v; refreshHitboxVisibility()
+end})
+ColBox:AddLabel('关闭NPC碰撞'):AddToggle({Default = false, Flag = 'col_ncol', Callback = function(v)
+    toggleNpcCollision(v)
+end})
+
+GUI:AddTabLabel('范围')
+
+local HitboxTab = GUI:AddTab({Icon = 'bullseye', Name = '范围'})
+local HitMain = HitboxTab:AddSection({Name = 'Hitbox 扩展器'})
+HitMain:AddLabel('启用扩展'):AddToggle({Default = false, Flag = 'hit_enable', Callback = function(v) State.hitboxEnabled = v; if v then updateAllHitboxes(); for _, p in ipairs(Players:GetPlayers()) do if p ~= player then setupHitboxTracking(p) end end else resetAllHitboxes() end end})
+for _, partName in ipairs(State.hitboxBodyParts) do
+    HitMain:AddLabel(partName):AddSlider({Min = 0, Max = 50, Default = 0, Rounding = 1, Flag = 'hit_' .. partName, Callback = function(v) State.hitboxSizes[partName] = v; updateAllHitboxes() end})
+end
+HitMain:AddLabel('整体尺寸'):AddSlider({Min = 0, Max = 50, Default = 0, Rounding = 1, Flag = 'hit_all', Callback = function(v) for _, n in ipairs(State.hitboxBodyParts) do State.hitboxSizes[n] = v end; updateAllHitboxes() end})
+HitMain:AddLabel('显示范围'):AddToggle({Default = false, Flag = 'hit_show_range', Callback = function(v)
+    toggleHitboxRangeDisplay(v)
+end})
+
+GUI:AddTabLabel('战斗')
+
+local AimTab = GUI:AddTab({Icon = 'crosshairs', Name = '瞄准'})
+local AimLock = AimTab:AddSection({Name = '自瞄'})
+AimLock:AddLabel('自瞄锁定'):AddToggle({Default = false, Flag = 'aim_enable', Callback = function(v) toggleLockOnPlayer(v) end})
+AimLock:AddLabel('团队检查'):AddToggle({Default = false, Flag = 'aim_team', Callback = function(v) getgenv().ScriptState.aimLockTeamCheck = v end})
+AimLock:AddLabel('可见检查'):AddToggle({Default = false, Flag = 'aim_vis', Callback = function(v) getgenv().ScriptState.aimLockVisibleCheck = v end})
+AimLock:AddLabel('部位'):AddDropdown({Default = 'Head', Values = {'Head', 'HumanoidRootPart', 'UpperTorso', 'LowerTorso'}, Flag = 'aim_part', Callback = function(v) getgenv().ScriptState.bodyPartSelected = v end})
+local AimOpt = AimTab:AddSection({Name = '优化'})
+AimOpt:AddLabel('平滑移动'):AddToggle({Default = true, Flag = 'aim_smooth', Callback = function(v) State.aimSmoothEnabled = v end})
+AimOpt:AddLabel('平滑速度'):AddSlider({Min = 1, Max = 20, Default = 5, Type = 'x', Flag = 'aim_smooth_spd', Callback = function(v) State.aimSmoothSpeed = v end})
+AimOpt:AddLabel('自动预测'):AddToggle({Default = true, Flag = 'aim_predict', Callback = function(v) State.aimAutoPredict = v end})
+AimOpt:AddLabel('预测量'):AddSlider({Min = 0, Max = 500, Default = 165, Type = 'ms', Flag = 'aim_pred_amt', Callback = function(v) State.aimPredictionAmount = tonumber(v) / 1000 end})
+local AimFovS = AimTab:AddSection({Name = 'FOV'})
+AimFovS:AddLabel('FOV显示'):AddToggle({Default = false, Flag = 'aim_fov', Callback = toggleAimFov})
+AimFovS:AddLabel('跟随鼠标'):AddToggle({Default = true, Flag = 'aim_fov_mouse', Callback = function(v) State.aimFovFollowMouse = v end})
+AimFovS:AddLabel('半径'):AddSlider({Min = 50, Max = 500, Default = 200, Flag = 'aim_fov_r', Callback = function(v) State.aimFovRadius = v end})
+local AimAdv = AimTab:AddSection({Name = '高级'})
+AimAdv:AddLabel('目标切换'):AddToggle({Default = true, Flag = 'aim_switch', Callback = function(v) State.aimTargetSwitchEnabled = v end})
+AimAdv:AddLabel('防抖'):AddToggle({Default = true, Flag = 'aim_shake', Callback = function(v) State.aimAntiShakeEnabled = v end})
+local AimKA = AimTab:AddSection({Name = 'KillAura'})
+AimKA:AddLabel('KillAura'):AddToggle({Default = false, Flag = 'ka_enable', Callback = toggleKillAura})
+AimKA:AddLabel('攻击玩家'):AddToggle({Default = true, Flag = 'ka_player', Callback = function(v) State.killAuraTargetPlayer = v end})
+AimKA:AddLabel('攻击NPC'):AddToggle({Default = false, Flag = 'ka_npc', Callback = function(v) State.killAuraTargetNPC = v end})
+AimKA:AddLabel('范围'):AddSlider({Min = 5, Max = 100, Default = 15, Flag = 'ka_range', Callback = function(v) State.killAuraRange = v end})
+AimKA:AddLabel('延迟'):AddSlider({Min = 0, Max = 5, Default = 0.5, Rounding = 1, Flag = 'ka_delay', Callback = function(v) State.killAuraDelay = v end})
+
+local MouseAimTab = GUI:AddTab({Icon = 'mouse-pointer', Name = '鼠标自瞄'})
+local AimMouse = MouseAimTab:AddSection({Name = '鼠标自瞄 (E键/右键)'})
+AimMouse:AddLabel('启用鼠标自瞄'):AddToggle({Default = false, Flag = 'aim_mouse_enable', Callback = function(v) State.aimMouseEnabled = v; if v then startMouseAimbot() else stopMouseAimbot() end end})
+AimMouse:AddLabel('模式'):AddDropdown({Default = 'Mouse', Values = {'Mouse', 'Camera'}, Flag = 'aim_mouse_mode', Callback = function(v) State.aimMouseMode = v; if v == 'Camera' then State.aimMouseToggled = false; State.aimMouseAutoFire = false end end})
+AimMouse:AddLabel('可见检查'):AddToggle({Default = true, Flag = 'aim_mouse_vis', Callback = function(v) State.aimMouseVisibleCheck = v end})
+AimMouse:AddLabel('团队检查'):AddToggle({Default = false, Flag = 'aim_mouse_team', Callback = function(v) State.aimMouseTeamCheck = v end})
+AimMouse:AddLabel('部位'):AddDropdown({Default = 'Head', Values = {'Head', 'HumanoidRootPart', 'UpperTorso', 'LowerTorso'}, Flag = 'aim_mouse_part', Callback = function(v) State.aimMouseBodyPart = v end})
+AimMouse:AddLabel('显示FOV圈'):AddToggle({Default = true, Flag = 'aim_mouse_fov', Callback = function(v) State.aimMouseShowFOV = v; if State.aimMouseFovCircle then State.aimMouseFovCircle.Visible = v end end})
+AimMouse:AddLabel('FOV半径'):AddSlider({Min = 50, Max = 500, Default = 200, Flag = 'aim_mouse_fov_r', Callback = function(v) State.aimMouseFOVRadius = v end})
+AimMouse:AddLabel('平滑速度'):AddSlider({Min = 1, Max = 20, Default = 5, Flag = 'aim_mouse_smooth', Callback = function(v) State.aimMouseSmoothSpeed = v end})
+AimMouse:AddLabel('自动预测'):AddToggle({Default = true, Flag = 'aim_mouse_predict', Callback = function(v) State.aimMousePredictionAmount = v and 0.165 or 0 end})
+AimMouse:AddLabel('自动开火'):AddToggle({Default = false, Flag = 'aim_mouse_autofire', Callback = function(v) if State.aimMouseMode == 'Camera' then v = false end; State.aimMouseAutoFire = v end})
+
+local SilentTab = GUI:AddTab({Icon = 'bolt', Name = '子弹追踪'})
+local SilMain = SilentTab:AddSection({Name = '子弹追踪'})
+SilMain:AddLabel('子弹追踪'):AddToggle({Default = false, Flag = 'silent_enable', Callback = toggleSilentAim})
+SilMain:AddLabel('预测'):AddSlider({Min = 0, Max = 500, Default = 165, Type = 'ms', Flag = 'silent_pred', Callback = function(v) State.silentAimPrediction = tonumber(v) / 1000 end})
+SilMain:AddLabel('命中几率'):AddSlider({Min = 0, Max = 100, Default = 100, Type = '%', Flag = 'silent_hit', Callback = function(v) State.silentAimHitChance = tonumber(v) end})
+SilMain:AddLabel('FOV'):AddSlider({Min = 50, Max = 1200, Default = 200, Type = 'px', Flag = 'silent_fov', Callback = function(v) State.silentAimFOV = tonumber(v) end})
+SilMain:AddLabel('子弹传送'):AddToggle({Default = false, Flag = 'silent_bullet_tp', Callback = function(v) State.silentAimBulletTeleport = v end})
+SilMain:AddLabel('显示FOV圈'):AddToggle({Default = true, Flag = 'silent_fov_show', Callback = function(v) State.silentAimShowFOV = v; updateSilentAimVisuals() end})
+SilMain:AddLabel('FOV跟随鼠标'):AddToggle({Default = false, Flag = 'silent_fov_mouse', Callback = function(v) State.silentAimFovFollowMouse = v end})
+local SilTracer = SilentTab:AddSection({Name = '追踪线'})
+SilTracer:AddLabel('显示追踪线'):AddToggle({Default = true, Flag = 'silent_tracer', Callback = function(v) State.silentAimShowTracer = v; updateSilentAimVisuals() end})
+SilTracer:AddLabel('追踪线粗细'):AddSlider({Min = 1, Max = 5, Default = 2, Type = 'px', Flag = 'silent_tracer_w', Callback = function(v) State.silentAimTracerThickness = v end})
+local SilHit = SilentTab:AddSection({Name = '击中音效'})
+SilHit:AddLabel('启用击中音效'):AddToggle({Default = false, Flag = 'silent_hitsound', Callback = function(v) State.hitSoundEnabled = v end})
+SilHit:AddLabel('音效音量'):AddSlider({Min = 1, Max = 10, Default = 5, Flag = 'silent_vol', Callback = function(v) State.hitSoundVolume = v end})
+local SilTarg = SilentTab:AddSection({Name = '目标'})
+SilTarg:AddLabel('目标类型'):AddDropdown({Default = 'Players', Values = {'Players', 'NPCs', 'Both'}, Flag = 'silent_type', Callback = function(v) State.silentAimTargetType = v end})
+SilTarg:AddLabel('部位'):AddDropdown({Default = 'Head', Values = {'Head', 'HumanoidRootPart', 'UpperTorso', 'LowerTorso'}, Flag = 'silent_part', Callback = function(v) State.silentAimPart = v end})
+SilTarg:AddLabel('可见检查'):AddToggle({Default = true, Flag = 'silent_vis', Callback = function(v) State.silentAimVisibleCheck = v end})
+SilTarg:AddLabel('团队检查'):AddToggle({Default = false, Flag = 'silent_team', Callback = function(v) State.silentAimTeamCheck = v end})
+
+GUI:AddTabLabel('视觉')
+
+local VisualTab = GUI:AddTab({Icon = 'eye', Name = '视觉'})
+local VisESP = VisualTab:AddSection({Name = 'ESP'})
+VisESP:AddLabel('开启ESP'):AddToggle({Default = false, Flag = 'esp_enable', Callback = function(v) State.espEnabled = v; if v then for _, p in ipairs(Players:GetPlayers()) do if p ~= player then createESPForPlayer(p) end end; startESPLoop() else stopESP() end end})
+VisESP:AddLabel('团队检查'):AddToggle({Default = false, Flag = 'esp_team', Callback = function(v) State.espSettings.TeamCheck = v; recreateAllESP() end})
+VisESP:AddLabel('最大距离'):AddSlider({Min = 100, Max = 5000, Default = 2000, Flag = 'esp_dist', Callback = function(v) State.espSettings.MaxDistance = v end})
+local VisBox = VisualTab:AddSection({Name = '方框'})
+VisBox:AddLabel('方框ESP'):AddToggle({Default = true, Flag = 'esp_box', Callback = function(v) State.espSettings.BoxEnabled = v; recreateAllESP() end})
+local VisName = VisualTab:AddSection({Name = '名字'})
+VisName:AddLabel('名字ESP'):AddToggle({Default = true, Flag = 'esp_name', Callback = function(v) State.espSettings.NameEnabled = v; recreateAllESP() end})
+local VisHP = VisualTab:AddSection({Name = '血量'})
+VisHP:AddLabel('血量ESP'):AddToggle({Default = true, Flag = 'esp_hp', Callback = function(v) State.espSettings.HealthEnabled = v; recreateAllESP() end})
+local VisDist = VisualTab:AddSection({Name = '距离'})
+VisDist:AddLabel('显示距离'):AddToggle({Default = true, Flag = 'esp_show_dist', Callback = function(v) State.espSettings.ShowDistance = v; recreateAllESP() end})
+local VisTracer = VisualTab:AddSection({Name = '追踪线'})
+VisTracer:AddLabel('追踪线'):AddToggle({Default = false, Flag = 'esp_tracer', Callback = function(v) State.espSettings.TracerEnabled = v; recreateAllESP() end})
+local VisDot = VisualTab:AddSection({Name = '头部圆点'})
+VisDot:AddLabel('头部圆点'):AddToggle({Default = false, Flag = 'esp_dot', Callback = function(v) State.espSettings.HeadDotEnabled = v; recreateAllESP() end})
+local VisPred = VisualTab:AddSection({Name = '敌人预测'})
+VisPred:AddLabel('移动预测'):AddToggle({Default = false, Flag = 'esp_pred', Callback = function(v) State.visualPredictionEnabled = v; if not v then for _, line in pairs(State.visualPredictionLines) do pcall(function() line:Remove() end) end; for _, dot in pairs(State.visualPredictionDots) do pcall(function() dot:Remove() end) end; State.visualPredictionLines = {}; State.visualPredictionDots = {} end end})
+VisPred:AddLabel('预测时间'):AddSlider({Min = 0.1, Max = 2, Default = 0.5, Rounding = 1, Type = 's', Flag = 'esp_pred_t', Callback = function(v) State.visualPredictionLength = v end})
+VisPred:AddLabel('预测线粗细'):AddSlider({Min = 1, Max = 4, Default = 1, Type = 'px', Flag = 'esp_pred_w', Callback = function(v) State.visualPredictionThickness = v end})
+VisPred:AddLabel('显示预测点'):AddToggle({Default = true, Flag = 'esp_pred_dot', Callback = function(v) State.visualPredictionShowDot = v end})
+VisPred:AddLabel('预测点大小'):AddSlider({Min = 3, Max = 12, Default = 6, Type = 'px', Flag = 'esp_pred_ds', Callback = function(v) State.visualPredictionDotSize = v end})
+local VisNPC = VisualTab:AddSection({Name = 'NPC ESP'})
+VisNPC:AddLabel('NPC ESP'):AddToggle({Default = false, Flag = 'npc_esp_enable', Callback = function(v) State.npcEspEnabled = v; if v then for _, char in ipairs(Workspace:GetChildren()) do if isNPC(char) then createNPCESPForChar(char) end end; startNPCESPLoop() else stopNPCESP() end end})
+VisNPC:AddLabel('最大距离'):AddSlider({Min = 100, Max = 5000, Default = 2000, Flag = 'npc_esp_dist', Callback = function(v) State.npcEspMaxDistance = v end})
+VisNPC:AddLabel('方框'):AddToggle({Default = true, Flag = 'npc_esp_box', Callback = function(v) State.npcEspSettings.BoxEnabled = v end})
+VisNPC:AddLabel('名字'):AddToggle({Default = true, Flag = 'npc_esp_name', Callback = function(v) State.npcEspSettings.NameEnabled = v end})
+VisNPC:AddLabel('血量'):AddToggle({Default = true, Flag = 'npc_esp_hp', Callback = function(v) State.npcEspSettings.HealthEnabled = v end})
+VisNPC:AddLabel('距离'):AddToggle({Default = true, Flag = 'npc_esp_show_dist', Callback = function(v) State.npcEspSettings.ShowDistance = v end})
+VisNPC:AddLabel('追踪线'):AddToggle({Default = false, Flag = 'npc_esp_tracer', Callback = function(v) State.npcEspSettings.TracerEnabled = v end})
+VisNPC:AddLabel('头部圆点'):AddToggle({Default = false, Flag = 'npc_esp_dot', Callback = function(v) State.npcEspSettings.HeadDotEnabled = v end})
+local VisFOV = VisualTab:AddSection({Name = 'FOV视角'})
+VisFOV:AddLabel('自定义FOV'):AddToggle({Default = false, Flag = 'fov_custom', Callback = toggleCustomFOV})
+VisFOV:AddLabel('FOV角度'):AddSlider({Min = 30, Max = 120, Default = 90, Type = 'deg', Flag = 'fov_angle', Callback = function(v) State.customFOV = v; if State.customFOVEnabled then camera.FieldOfView = v end end})
+
+local WorldTab = GUI:AddTab({Icon = 'globe', Name = '世界'})
+local WorldTime = WorldTab:AddSection({Name = '时间'})
+WorldTime:AddLabel('时间'):AddSlider({Min = 0, Max = 24, Default = 14, Flag = 'world_time', Callback = function(v) pcall(function() game:GetService('Lighting').ClockTime = v end); if State.timeLockConnection then State.lockedTimeValue = v end end})
+WorldTime:AddLabel('时间锁定'):AddToggle({Default = false, Flag = 'world_tlock', Callback = function(v) if v then State.lockedTimeValue = game:GetService('Lighting').ClockTime or 14; State.timeLockConnection = RunService.Heartbeat:Connect(function() pcall(function() game:GetService('Lighting').ClockTime = State.lockedTimeValue end) end) elseif State.timeLockConnection then State.timeLockConnection:Disconnect(); State.timeLockConnection = nil end end})
+do local b1,b2,b3; b1 = WorldTime:AddLabel('白天'):AddToggle({Default = false, Flag = 'btn_day', Callback = function(v) if v then game:GetService('Lighting').ClockTime = 12; b1:SetValue(false) end end}); b2 = WorldTime:AddLabel('黄昏'):AddToggle({Default = false, Flag = 'btn_dusk', Callback = function(v) if v then game:GetService('Lighting').ClockTime = 18; b2:SetValue(false) end end}); b3 = WorldTime:AddLabel('夜晚'):AddToggle({Default = false, Flag = 'btn_night', Callback = function(v) if v then game:GetService('Lighting').ClockTime = 0; b3:SetValue(false) end end}) end
+WorldTime:AddLabel('夜视'):AddToggle({Default = false, Flag = 'world_nv', Callback = toggleNightVision})
+
+GUI:AddTabLabel('系统')
+
+local SystemTab = GUI:AddTab({Icon = 'gear', Name = '系统'})
+local SysSvr = SystemTab:AddSection({Name = '服务器'})
+do local b; b = SysSvr:AddLabel('重新进入'):AddToggle({Default = false, Flag = 'btn_rejoin', Callback = function(v) if v then rejoinServer(); b:SetValue(false) end end}) end
+do local b; b = SysSvr:AddLabel('单人服务器'):AddToggle({Default = false, Flag = 'btn_solo', Callback = function(v) if v then TeleportService:GetGameInstancesAsync(game.PlaceId):andThen(function(r) local si = r and r.GameInstances or {}; if #si == 0 then return end; local best, minc = nil, math.huge; for _, s in ipairs(si) do if s.Players and s.Players < minc then minc = s.Players; best = s end end; if best and best.PlaceInstanceId then local to = Instance.new('TeleportOptions'); to.ShouldReserveServer = false; TeleportService:TeleportToPlaceInstance(game.PlaceId, best.PlaceInstanceId, player, to) end end); b:SetValue(false) end end}) end
+local SysSafe = SystemTab:AddSection({Name = '安全传送'})
+SysSafe:AddLabel('自动安全传送'):AddToggle({Default = false, Flag = 'sys_safe', Callback = toggleAutoSafeTeleport})
+SysSafe:AddLabel('血量阈值'):AddSlider({Min = 5, Max = 50, Default = 20, Flag = 'sys_safe_hp', Callback = function(v) State.autoSafeTeleportHealthThreshold = v end})
+SysSafe:AddLabel('冷却'):AddSlider({Min = 1, Max = 30, Default = 5, Flag = 'sys_safe_cd', Callback = function(v) State.autoSafeTeleportCooldown = v end})
+do local b; b = SysSafe:AddLabel('快速保存'):AddToggle({Default = false, Flag = 'btn_save', Callback = function(v) if v then quickSave(); b:SetValue(false) end end}) end
+do local b; b = SysSafe:AddLabel('快速传送'):AddToggle({Default = false, Flag = 'btn_tp', Callback = function(v) if v then quickTeleport(); b:SetValue(false) end end}) end
+do local b; b = SysSafe:AddLabel('清除位置'):AddToggle({Default = false, Flag = 'btn_clearpos', Callback = function(v) if v then clearAllSavedPositions(); b:SetValue(false) end end}) end
+local SysChar = SystemTab:AddSection({Name = '角色'})
+do local b; b = SysChar:AddLabel('自杀'):AddToggle({Default = false, Flag = 'btn_suicide', Callback = function(v) if v then suicide(); b:SetValue(false) end end}) end
+local SysTool = SystemTab:AddSection({Name = '工具'})
+SysTool:AddLabel('防甩飞'):AddToggle({Default = false, Flag = 'sys_noswing', Callback = function(v) State.isAntiFlyEnabled = v end})
+SysTool:AddLabel('左键删除建筑'):AddToggle({Default = false, Flag = 'sys_clickdel', Callback = function(v) State.isLeftClickDeleteEnabled = v; toggleLeftClickDelete(v) end})
+do local b; b = SysTool:AddLabel('摧毁面板'):AddToggle({Default = false, Flag = 'btn_destroy', Callback = function(v) if v then destroyUI(); b:SetValue(false) end end}) end
+
+-- Keybinds
+UIS.InputBegan:Connect(function(input,processed) if processed then return end; if input.KeyCode==Enum.KeyCode.Z and State.isRunKeyEnabled then toggleSpeed(not speedActive) elseif input.KeyCode==Enum.KeyCode.X then toggleFly(not State.flyEnabled)
+    elseif input.KeyCode == State.aimMouseToggleKey then toggleMouseAim()
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then State.aimMouseRightHeld = true; if State.aimMouseEnabled and State.aimMouseMode == "Camera" then State.aimMouseTarget = getClosestPlayerToMouse() end
+end end)
+UIS.InputEnded:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton2 then State.aimMouseRightHeld=false; State.aimMouseTarget=nil; releaseAimAutoFire() end end)
+
+-- Init
+State.promptTriggeredConnection=ProximityPromptService.PromptTriggered:Connect(function(p) if p and p.Parent then State.lastInteractedObject=p.Parent end end)
+State.promptButtonHoldBeganConnection=ProximityPromptService.PromptButtonHoldBegan:Connect(function(p) if p and p.Parent then State.lastInteractedObject=p.Parent end end)
+for _, p in ipairs(Players:GetPlayers()) do if p ~= player then setupHitboxTracking(p) end end
+Players.PlayerAdded:Connect(function(p) if p ~= player then setupHitboxTracking(p); addHitboxRangeCircleForPlayer(p) end end)
+Players.PlayerRemoving:Connect(function(p) removeHitboxRangeCircleForPlayer(p) end)
+task.delay(1,function() Notification.new({Title = "游戏功能中心", Content = "加载完成！| 范围+鼠标自瞄", Duration = 4}) end)
